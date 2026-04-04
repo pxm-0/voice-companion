@@ -28,7 +28,9 @@ export async function initRealTime() {
     })
 
     // create offer
-    const offer = await pc.createOffer()
+    const offer = await pc.createOffer({
+      offerToReceiveAudio: true,
+    })
     await pc.setLocalDescription(offer)
 
     // send to OpenAI
@@ -47,8 +49,10 @@ export async function initRealTime() {
         throw new Error("No SDP returned from server");
     }
 
-    await pc.setRemoteDescription({
+    await pc.setRemoteDescription(
+      new RTCSessionDescription({
         type: "answer",
-        sdp: data.sdp.trim(),
-    })
+        sdp: data.sdp,
+      })
+    )
 }

@@ -4,42 +4,37 @@ export async function POST(req: Request) {
   try {
      const { sdp } = await req.json()
 
-    const response = await fetch("https://api.openai.com/v1/realtime", {
+    const response = await fetch("https://api.openai.com/v1/realtime?model=gpt-realtime-mini", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
-        "Content-Type": "application/json",
+        "Content-Type": "application/sdp",
       },
-      body: JSON.stringify({
-        model: "gpt-realtime-mini",
-        sdp,
-      }),
+      body: sdp,
     })
 
-    const text = await response.text()
+    let text = await response.text()
 
-    console.log("OpenAI Response: ", text)
+    // Clean and normalize SDP
+    text = text.trim()
 
-    let data
-    try {
-      data = JSON.parse(text)
-    } catch (error) {
-      console.error("Failed to parse OpenAI response as JSON: ", error)
-      return new Response("Invalid response from OpenAI", { status: 502 })
+    // Normalize line endings to strict \r\n
+    let normalizedSdp = text.replace(/\r?\n/g, "\r\n")
+
+    // Ensure it ends with a final newline (required by some browsers)
+    if (!normalizedSdp.endsWith("\r\n")) {
+      normalizedSdp += "\r\n"
     }
+
+    console.log("OpenAI Response (SDP):", text)
 
     if (!response.ok) {
-      console.error("OpenAI API error: ", data)
-      return Response.json( {error: data}, { status: 502 })
+      console.error("OpenAI API error:", text)
+      return new Response(text, { status: 502 })
     }
 
-    if (data?.answer?.sdp) {
-      return Response.json({ sdp: data.answer.sdp })
-    }
-
-    if (data?.sdp) {  
-      return Response.json({ sdp: data.sdp })
-    }
+    // OpenAI returns raw SDP, not JSON
+    return Response.json({ sdp: normalizedSdp })
 
   } catch (error) {
     console.error("Error in /api/realtime: ", error)
