@@ -11,6 +11,6 @@ export function useRealTime() {
 
     return { 
         connected,
-        start
+        connect,
      }
 }

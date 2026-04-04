@@ -34,12 +34,21 @@ export async function initRealTime() {
     // send to OpenAI
     const res = await fetch("/api/realtime", {
         method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
         body: JSON.stringify({ sdp: offer.sdp }),
     });
 
     const data = await res.json()
 
+    if (!data?.sdp) {
+        console.error("Invalid SDP response", data);
+        throw new Error("No SDP returned from server");
+    }
+
     await pc.setRemoteDescription({
         type: "answer",
-        sdp: data.sdp,
+        sdp: data.sdp.trim(),
     })
+}
