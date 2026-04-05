@@ -1,5 +1,3 @@
-:::writing{variant=“standard” id=“read2”}
-
 🧠 Voice Companion
 
 Realtime voice-based AI companion with memory, modes, and journaling.
