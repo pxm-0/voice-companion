@@ -4,7 +4,7 @@ import "./globals.css"
 
 export const metadata: Metadata = {
   title: "Companion Journal",
-  description: "Voice journal prototype with saved sessions and light memory.",
+  description: "A cozy voice journal with daily captures, session artifacts, and a growing second brain.",
 }
 
 export default function RootLayout({
@@ -14,7 +14,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="h-full antialiased">
-      <body className="min-h-full bg-[#05070b] text-[#F4F7FB]">
+      <body className="min-h-full bg-[#efe4d7] text-[#2f241d]">
         <div className="flex min-h-full flex-col">
           <AppNav />
           <div className="flex-1">{children}</div>

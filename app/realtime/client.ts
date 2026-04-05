@@ -6,6 +6,7 @@ let pc: RTCPeerConnection | null = null
 let dc: RTCDataChannel | null = null
 let localStream: MediaStream | null = null
 let audioEl: HTMLAudioElement | null = null
+let pendingRealtimeEvents: string[] = []
 
 let turnCounter = 0
 let activeAssistantTurnId: string | null = null
@@ -21,6 +22,42 @@ function nextTurnId(role: "user" | "assistant") {
 
 function emitTranscriptEvent(type: "transcript:update" | "transcript:final", detail: TranscriptTurn) {
   window.dispatchEvent(new CustomEvent<TranscriptTurn>(type, { detail }))
+}
+
+function flushPendingRealtimeEvents() {
+  if (!dc || dc.readyState !== "open" || pendingRealtimeEvents.length === 0) {
+    return
+  }
+
+  for (const payload of pendingRealtimeEvents) {
+    dc.send(payload)
+  }
+
+  pendingRealtimeEvents = []
+}
+
+export function sendRealtimeEvent(event: Record<string, unknown>) {
+  const payload = JSON.stringify(event)
+
+  if (dc && dc.readyState === "open") {
+    dc.send(payload)
+    return
+  }
+
+  pendingRealtimeEvents.push(payload)
+}
+
+export function updateRealtimeSessionInstructions(instructions: string) {
+  if (!instructions.trim()) {
+    return
+  }
+
+  sendRealtimeEvent({
+    type: "session.update",
+    session: {
+      instructions,
+    },
+  })
 }
 
 function ensureAssistantTurn() {
@@ -132,7 +169,7 @@ function handleServerEvent(data: Record<string, unknown>) {
   }
 }
 
-export async function initRealTime() {
+export async function initRealTime(options?: { instructions?: string }) {
   const initVersion = ++sessionVersion
 
   if (pc || localStream || dc) {
@@ -156,6 +193,13 @@ export async function initRealTime() {
 
   const dataChannel = peerConnection.createDataChannel("oai-events")
   dc = dataChannel
+  dataChannel.onopen = () => {
+    flushPendingRealtimeEvents()
+
+    if (options?.instructions?.trim()) {
+      updateRealtimeSessionInstructions(options.instructions)
+    }
+  }
   dataChannel.onmessage = (event) => {
     try {
       const data: unknown = JSON.parse(event.data)
@@ -189,7 +233,10 @@ export async function initRealTime() {
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ sdp: offer.sdp }),
+      body: JSON.stringify({
+        sdp: offer.sdp,
+        instructions: options?.instructions,
+      }),
     })
 
     const data = await res.json()
@@ -249,5 +296,6 @@ export function stopRealTime() {
   }
 
   resetAssistantState()
+  pendingRealtimeEvents = []
   console.log("Real-time connection stopped")
 }

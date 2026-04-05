@@ -1,4 +1,5 @@
 import { ProfileMemoryKind } from "@prisma/client"
+import type { CompanionMode, SessionInputType } from "@/lib/session-types"
 
 type ExistingMemory = {
   kind: ProfileMemoryKind
@@ -8,6 +9,8 @@ type ExistingMemory = {
 type SummaryGenerationInput = {
   startedAt: string
   endedAt: string
+  mode: CompanionMode
+  inputType: SessionInputType
   turns: Array<{
     role: "user" | "assistant"
     text: string
@@ -17,8 +20,11 @@ type SummaryGenerationInput = {
 }
 
 export type SummaryGenerationResult = {
+  title: string
   sessionSummary: string
   keyThemes: string[]
+  rapidLogBullets: string[]
+  actionItems: string[]
   mood: string
   profileSummary: string
   memories: Array<{
@@ -34,14 +40,29 @@ const SUMMARY_JSON_SCHEMA = {
     type: "object",
     additionalProperties: false,
     properties: {
+      title: {
+        type: "string",
+        description: "A short, specific title for the saved session entry.",
+      },
       sessionSummary: {
         type: "string",
-        description: "A concise human-readable summary of the completed voice session.",
+        description: "A concise human-readable summary of the completed journal session.",
       },
       keyThemes: {
         type: "array",
         items: { type: "string" },
         minItems: 1,
+        maxItems: 5,
+      },
+      rapidLogBullets: {
+        type: "array",
+        items: { type: "string" },
+        minItems: 1,
+        maxItems: 6,
+      },
+      actionItems: {
+        type: "array",
+        items: { type: "string" },
         maxItems: 5,
       },
       mood: {
@@ -71,7 +92,16 @@ const SUMMARY_JSON_SCHEMA = {
         },
       },
     },
-    required: ["sessionSummary", "keyThemes", "mood", "profileSummary", "memories"],
+    required: [
+      "title",
+      "sessionSummary",
+      "keyThemes",
+      "rapidLogBullets",
+      "actionItems",
+      "mood",
+      "profileSummary",
+      "memories",
+    ],
   },
 } as const
 
@@ -86,13 +116,17 @@ function buildPrompt(input: SummaryGenerationInput) {
     .join("\n")
 
   return [
-    "You are updating a companion journal memory system.",
+    "You are updating a cozy companion journal and second-brain system.",
     "Return JSON that matches the provided schema exactly.",
-    "Focus on stable, durable user information only.",
-    "Do not store fleeting details unless they reflect a meaningful recurring theme.",
-    "Use memory items for facts, preferences, goals, relationships, routines, or lasting themes.",
-    "If no durable memory should be added, return an empty memories array.",
+    "The saved artifact should feel like a thoughtful bullet-journal entry, not a transcript dump.",
+    "Write with warm clarity and specificity.",
+    "Focus durable memory on stable preferences, goals, patterns, relationships, routines, or identity-level facts.",
+    "Do not save flimsy or one-off details as memory.",
+    "Only create action items when the user expressed a concrete next step or commitment.",
+    "Avoid therapy clichés, clinical framing, and generic safety disclaimers in the journal artifact.",
     "",
+    `Input type: ${input.inputType}`,
+    `Mode: ${input.mode}`,
     `Session started: ${input.startedAt}`,
     `Session ended: ${input.endedAt}`,
     "",
@@ -118,6 +152,12 @@ function isProfileMemoryKind(value: string): value is ProfileMemoryKind {
   )
 }
 
+function assertStringArray(value: unknown, label: string) {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
+    throw new Error(`Invalid ${label} in summary payload.`)
+  }
+}
+
 function assertSummaryPayload(data: unknown): asserts data is SummaryGenerationResult {
   if (!data || typeof data !== "object") {
     throw new Error("Summary payload was not an object.")
@@ -125,13 +165,17 @@ function assertSummaryPayload(data: unknown): asserts data is SummaryGenerationR
 
   const payload = data as Record<string, unknown>
 
+  if (typeof payload.title !== "string" || payload.title.trim().length === 0) {
+    throw new Error("Missing title in summary payload.")
+  }
+
   if (typeof payload.sessionSummary !== "string" || payload.sessionSummary.trim().length === 0) {
     throw new Error("Missing sessionSummary in summary payload.")
   }
 
-  if (!Array.isArray(payload.keyThemes) || payload.keyThemes.some((theme) => typeof theme !== "string")) {
-    throw new Error("Invalid keyThemes in summary payload.")
-  }
+  assertStringArray(payload.keyThemes, "keyThemes")
+  assertStringArray(payload.rapidLogBullets, "rapidLogBullets")
+  assertStringArray(payload.actionItems, "actionItems")
 
   if (typeof payload.mood !== "string" || payload.mood.trim().length === 0) {
     throw new Error("Missing mood in summary payload.")
@@ -161,6 +205,10 @@ function assertSummaryPayload(data: unknown): asserts data is SummaryGenerationR
   }
 }
 
+function sanitizeStringArray(values: string[]) {
+  return values.map((value) => value.trim()).filter(Boolean)
+}
+
 export async function generateSessionSummary(
   input: SummaryGenerationInput,
 ): Promise<SummaryGenerationResult> {
@@ -183,7 +231,7 @@ export async function generateSessionSummary(
         {
           role: "system",
           content:
-            "You produce structured JSON for a journal companion app. Keep summaries concise and memories durable.",
+            "You produce structured JSON for a cozy journal companion app. Keep artifacts thoughtful, concise, and grounded in the user's actual words.",
         },
         {
           role: "user",
@@ -224,8 +272,11 @@ export async function generateSessionSummary(
   assertSummaryPayload(parsed)
 
   return {
+    title: parsed.title.trim(),
     sessionSummary: parsed.sessionSummary.trim(),
-    keyThemes: parsed.keyThemes.map((theme) => theme.trim()).filter(Boolean),
+    keyThemes: sanitizeStringArray(parsed.keyThemes),
+    rapidLogBullets: sanitizeStringArray(parsed.rapidLogBullets),
+    actionItems: sanitizeStringArray(parsed.actionItems),
     mood: parsed.mood.trim(),
     profileSummary: parsed.profileSummary.trim(),
     memories: parsed.memories.map((memory) => ({

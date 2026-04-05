@@ -1,85 +1,89 @@
 import Link from "next/link"
-import { SessionStatus } from "@prisma/client"
+import { getModeLabel } from "@/lib/brain"
 import { formatDateTime } from "@/lib/format-date"
-import { getSessionList, getSummaryPreview } from "@/lib/session-finalizer"
-
-function getStatusLabel(status: SessionStatus) {
-  switch (status) {
-    case SessionStatus.COMPLETED:
-      return "Complete"
-    case SessionStatus.SUMMARY_FAILED:
-      return "Summary failed"
-    default:
-      return "Processing"
-  }
-}
-
-function getStatusClasses(status: SessionStatus) {
-  switch (status) {
-    case SessionStatus.COMPLETED:
-      return "border-emerald-400/30 bg-emerald-400/10 text-emerald-200"
-    case SessionStatus.SUMMARY_FAILED:
-      return "border-amber-400/30 bg-amber-400/10 text-amber-200"
-    default:
-      return "border-white/10 bg-white/5 text-[#B8C5D6]"
-  }
-}
+import { getSessionList } from "@/lib/session-finalizer"
 
 export default async function SessionsPage() {
   const sessions = await getSessionList()
 
   return (
-    <main className="min-h-full bg-[radial-gradient(circle_at_top,#18253b_0%,#0d131d_35%,#06080d_100%)] px-5 py-8 sm:px-8 lg:px-10">
+    <main className="min-h-full bg-[linear-gradient(180deg,#f5ede2_0%,#efe4d6_45%,#e8ddcf_100%)] px-4 py-8 text-[#2f241d] sm:px-6 lg:px-8">
       <div className="mx-auto max-w-6xl">
-        <div className="flex items-end justify-between gap-4">
-          <div>
-            <p className="text-[11px] uppercase tracking-[0.34em] text-[#7D93AE]">Saved Sessions</p>
-            <h1 className="mt-2 text-3xl font-semibold text-white">Conversation history</h1>
-            <p className="mt-3 max-w-2xl text-sm leading-7 text-[#AAB9CB]">
-              Raw transcripts are retained for the latest five sessions. Older sessions remain visible through their durable summaries and metadata.
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div className="max-w-2xl">
+            <p className="text-[11px] uppercase tracking-[0.34em] text-[#9f7c63]">Archive</p>
+            <h1 className="mt-2 font-[family-name:Georgia,serif] text-4xl text-[#31251d]">Your saved session entries</h1>
+            <p className="mt-3 text-sm leading-7 text-[#705d4e]">
+              Sessions stay as the primary journal artifact. Recent ones keep full transcript turns; older ones still live on
+              through their title, summary, bullets, tasks, and themes.
             </p>
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-[#C9D5E4]">
-            {sessions.length} {sessions.length === 1 ? "session" : "sessions"}
+          <div className="rounded-[24px] border border-[#dccdb8] bg-[#fff8ef] px-5 py-4 text-sm text-[#6e5b4d] shadow-[0_8px_24px_rgba(111,81,56,0.06)]">
+            {sessions.length} {sessions.length === 1 ? "entry" : "entries"}
           </div>
         </div>
 
         <div className="mt-8 space-y-4">
           {sessions.length === 0 ? (
-            <div className="rounded-[28px] border border-dashed border-white/10 bg-white/[0.03] p-8 text-center text-[#A8B5C6]">
-              No sessions saved yet. Finish a live voice session and it will appear here.
+            <div className="rounded-[28px] border border-dashed border-[#d9cbb7] bg-[#fffaf1] p-8 text-center text-[#756353]">
+              No sessions saved yet. Start a voice check-in or save a manual log and your archive will begin here.
             </div>
           ) : (
             sessions.map((session) => (
               <Link
                 key={session.id}
                 href={`/sessions/${session.id}`}
-                className="block rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(20,25,36,0.95),rgba(11,15,23,0.98))] p-5 shadow-[0_16px_60px_rgba(0,0,0,0.22)] transition-transform hover:-translate-y-0.5"
+                className="block rounded-[32px] border border-[#dbcdb8] bg-[#fffaf2] p-6 shadow-[0_18px_50px_rgba(92,63,39,0.08)] transition-transform hover:-translate-y-0.5"
               >
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
                   <div className="max-w-3xl">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className={`rounded-full border px-3 py-1 text-xs ${getStatusClasses(session.status)}`}>
-                        {getStatusLabel(session.status)}
+                      <span className="rounded-full border border-[#d7b79a] bg-[#f9efe2] px-3 py-1 text-xs text-[#7c5b45]">
+                        {session.inputType === "voice" ? "Voice" : "Manual"}
                       </span>
-                      <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-[#B8C5D6]">
-                        {session.turnCount} turns
+                      <span className="rounded-full border border-[#e1d4c2] bg-white px-3 py-1 text-xs text-[#8e7d6c]">
+                        {getModeLabel(session.mode)}
                       </span>
-                      <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-[#B8C5D6]">
+                      <span className="rounded-full border border-[#e1d4c2] bg-white px-3 py-1 text-xs text-[#8e7d6c]">
                         {session.transcriptRetained ? "Transcript retained" : "Summary only"}
                       </span>
                     </div>
 
-                    <p className="mt-4 text-lg font-medium text-white">{getSummaryPreview(session.summary)}</p>
-                    <p className="mt-3 text-sm text-[#8FA2BA]">
-                      {formatDateTime(session.startedAt)} to {formatDateTime(session.endedAt)}
+                    <h2 className="mt-4 font-[family-name:Georgia,serif] text-3xl text-[#31251d]">
+                      {session.artifact?.title ?? "Untitled session"}
+                    </h2>
+                    <p className="mt-3 text-sm leading-7 text-[#695646]">
+                      {session.artifact?.summary ?? "This entry was saved, but the artifact still needs processing."}
                     </p>
+
+                    {session.artifact?.rapidLogBullets.length ? (
+                      <ul className="mt-4 space-y-2 text-sm text-[#564539]">
+                        {session.artifact.rapidLogBullets.slice(0, 3).map((bullet) => (
+                          <li key={bullet} className="flex gap-2">
+                            <span className="mt-2 h-1.5 w-1.5 rounded-full bg-[#b78063]" />
+                            <span>{bullet}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
                   </div>
 
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-[#D7E1EE]">
-                    <p className="text-[11px] uppercase tracking-[0.28em] text-[#7D93AE]">Mood</p>
-                    <p className="mt-2">{session.summary?.mood ?? "Unavailable"}</p>
+                  <div className="grid gap-3 sm:min-w-56">
+                    <div className="rounded-[24px] border border-[#e1d4c2] bg-[#fff8ef] px-4 py-3 text-sm text-[#6c5848]">
+                      <p className="text-[11px] uppercase tracking-[0.26em] text-[#9f7c63]">Mood</p>
+                      <p className="mt-2">{session.artifact?.mood ?? "Unavailable"}</p>
+                    </div>
+                    <div className="rounded-[24px] border border-[#e1d4c2] bg-[#fff8ef] px-4 py-3 text-sm text-[#6c5848]">
+                      <p className="text-[11px] uppercase tracking-[0.26em] text-[#9f7c63]">Tasks</p>
+                      <p className="mt-2">
+                        {session.tasks.filter((task) => !task.completed).length} open / {session.tasks.length} total
+                      </p>
+                    </div>
+                    <div className="rounded-[24px] border border-[#e1d4c2] bg-[#fff8ef] px-4 py-3 text-sm text-[#6c5848]">
+                      <p className="text-[11px] uppercase tracking-[0.26em] text-[#9f7c63]">Captured</p>
+                      <p className="mt-2">{formatDateTime(session.endedAt)}</p>
+                    </div>
                   </div>
                 </div>
               </Link>

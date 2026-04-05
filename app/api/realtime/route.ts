@@ -2,7 +2,7 @@ const REALTIME_MODEL = "gpt-realtime-mini"
 
 export async function POST(req: Request) {
   try {
-    const { sdp } = await req.json()
+    const { sdp, instructions } = await req.json()
 
     if (typeof sdp !== "string" || !sdp.trim()) {
       return Response.json({ error: "Missing SDP offer" }, { status: 400 })
@@ -15,6 +15,7 @@ export async function POST(req: Request) {
     const sessionConfig = {
       type: "realtime",
       model: REALTIME_MODEL,
+      ...(typeof instructions === "string" && instructions.trim() ? { instructions: instructions.trim() } : {}),
       audio: {
         input: {
           transcription: {

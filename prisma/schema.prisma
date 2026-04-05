@@ -13,6 +13,17 @@ enum SessionStatus {
   SUMMARY_FAILED
 }
 
+enum SessionInputType {
+  VOICE
+  MANUAL
+}
+
+enum CompanionMode {
+  THINK_WITH_ME
+  REFLECT
+  JOURNAL_QUIETLY
+}
+
 enum SessionTurnRole {
   USER
   ASSISTANT
@@ -33,18 +44,22 @@ enum ProfileMemoryKind {
 }
 
 model Session {
-  id                String         @id @default(cuid())
-  startedAt         DateTime
-  endedAt           DateTime
-  status            SessionStatus  @default(PROCESSING)
-  turnCount         Int
-  transcriptRetained Boolean       @default(true)
-  processingError   String?
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
-  turns             SessionTurn[]
-  summary           SessionSummary?
-  memoryItems       ProfileMemory[]
+  id                 String           @id @default(cuid())
+  startedAt          DateTime
+  endedAt            DateTime
+  entryDate          DateTime         @default(now())
+  inputType          SessionInputType @default(VOICE)
+  mode               CompanionMode    @default(THINK_WITH_ME)
+  status             SessionStatus    @default(PROCESSING)
+  turnCount          Int
+  transcriptRetained Boolean          @default(true)
+  processingError    String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  turns              SessionTurn[]
+  tasks              Task[]
+  summary            SessionSummary?
+  memoryItems        ProfileMemory[]
 }
 
 model SessionTurn {
@@ -61,13 +76,30 @@ model SessionTurn {
 }
 
 model SessionSummary {
-  id             String   @id @default(cuid())
-  sessionId      String   @unique
-  session        Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  summary        String
-  keyThemesJson  String
-  mood           String
-  createdAt      DateTime @default(now())
+  id                 String   @id @default(cuid())
+  sessionId          String   @unique
+  session            Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  title              String   @default("Untitled session")
+  summary            String
+  keyThemesJson      String
+  rapidLogBulletsJson String   @default("[]")
+  mood               String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @default(now()) @updatedAt
+}
+
+model Task {
+  id         String   @id @default(cuid())
+  sessionId  String
+  session    Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  content    String
+  completed  Boolean  @default(false)
+  orderIndex Int
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([sessionId, orderIndex])
+  @@index([completed, updatedAt])
 }
 
 model ProfileMemory {
@@ -77,6 +109,7 @@ model ProfileMemory {
   sourceSessionId String?
   sourceSession   Session?          @relation(fields: [sourceSessionId], references: [id], onDelete: SetNull)
   lastSeenAt      DateTime
+  pinned          Boolean           @default(false)
   active          Boolean           @default(true)
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
