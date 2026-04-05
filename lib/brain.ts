@@ -1,4 +1,6 @@
 import type { CompanionMode, ProfileMemoryView } from "@/lib/session-types"
+import { getTopMemories } from "./memory"
+
 
 type BuildInstructionsInput = {
   mode: CompanionMode
@@ -95,4 +97,17 @@ export function buildInstructions({
     "Relevant context to use subtly:",
     ...(relevantMemories.length > 0 ? relevantMemories.map((memory) => `- ${memory}`) : ["- None yet."]),
   ].join("\n")
+}
+
+export function buildInstructions(base: string) {
+  const memories = getTopMemories(3)
+
+  const context = memories.map(m => `- ${m.value}`).join("\n")
+
+  return `
+${base}
+
+Relevant context:
+${context}
+`
 }

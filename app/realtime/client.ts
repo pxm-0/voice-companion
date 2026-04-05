@@ -15,6 +15,9 @@ let assistantHasAudioTranscript = false
 let assistantTurnFinalized = false
 let sessionVersion = 0
 
+let lastUserText = ""
+let finalText = ""
+
 function nextTurnId(role: "user" | "assistant") {
   turnCounter += 1
   return `${role}-${Date.now()}-${turnCounter}`
@@ -124,6 +127,8 @@ function handleServerEvent(data: Record<string, unknown>) {
           : ""
     if (!text || !text.trim()) return
 
+    lastUserText = text
+
     emitTranscriptEvent("transcript:final", {
       id: nextTurnId("user"),
       role: "user",
@@ -166,6 +171,22 @@ function handleServerEvent(data: Record<string, unknown>) {
 
   if (eventType === "response.done") {
     finalizeAssistantTurn()
+    
+    //memory extraction
+    try {
+    fetch("/api/extract", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        user: lastUserText,
+        assistant: finalText,
+      }),
+    })
+  } catch (err) {
+    console.error("Memory extraction failed", err)
+  }
   }
 }
 
