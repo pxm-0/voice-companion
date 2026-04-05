@@ -1,0 +1,93 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum SessionStatus {
+  PROCESSING
+  COMPLETED
+  SUMMARY_FAILED
+}
+
+enum SessionTurnRole {
+  USER
+  ASSISTANT
+}
+
+enum SessionTurnStatus {
+  STREAMING
+  FINAL
+}
+
+enum ProfileMemoryKind {
+  IDENTITY
+  PREFERENCE
+  GOAL
+  THEME
+  RELATIONSHIP
+  ROUTINE
+}
+
+model Session {
+  id                String         @id @default(cuid())
+  startedAt         DateTime
+  endedAt           DateTime
+  status            SessionStatus  @default(PROCESSING)
+  turnCount         Int
+  transcriptRetained Boolean       @default(true)
+  processingError   String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  turns             SessionTurn[]
+  summary           SessionSummary?
+  memoryItems       ProfileMemory[]
+}
+
+model SessionTurn {
+  id         String            @id @default(cuid())
+  sessionId  String
+  session    Session           @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  orderIndex Int
+  role       SessionTurnRole
+  text       String
+  status     SessionTurnStatus
+  createdAt  DateTime          @default(now())
+
+  @@index([sessionId, orderIndex])
+}
+
+model SessionSummary {
+  id             String   @id @default(cuid())
+  sessionId      String   @unique
+  session        Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  summary        String
+  keyThemesJson  String
+  mood           String
+  createdAt      DateTime @default(now())
+}
+
+model ProfileMemory {
+  id              String            @id @default(cuid())
+  kind            ProfileMemoryKind
+  content         String
+  sourceSessionId String?
+  sourceSession   Session?          @relation(fields: [sourceSessionId], references: [id], onDelete: SetNull)
+  lastSeenAt      DateTime
+  active          Boolean           @default(true)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@unique([kind, content])
+  @@index([active, lastSeenAt])
+}
+
+model ProfileSnapshot {
+  id        String   @id @default("singleton")
+  summary   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

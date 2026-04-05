@@ -1,8 +1,10 @@
 "use client"
 
+import Link from "next/link"
 import { useEffect, useState } from "react"
 import { useRealTime } from "./realtime/useRealtime"
 import type { TranscriptTurn } from "./realtime/types"
+import type { FinalizeSessionResponse } from "@/lib/session-types"
 
 function upsertTurn(turns: TranscriptTurn[], next: TranscriptTurn) {
   const existingIndex = turns.findIndex((turn) => turn.id === next.id)
@@ -19,6 +21,10 @@ function upsertTurn(turns: TranscriptTurn[], next: TranscriptTurn) {
 export default function Home() {
   const { connected, connecting, connect, disconnect } = useRealTime()
   const [turns, setTurns] = useState<TranscriptTurn[]>([])
+  const [sessionStartedAt, setSessionStartedAt] = useState<string | null>(null)
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle")
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [savedSession, setSavedSession] = useState<FinalizeSessionResponse | null>(null)
 
   useEffect(() => {
     const onTranscriptUpdate = (event: Event) => {
@@ -43,12 +49,77 @@ export default function Home() {
   const transcriptCount = turns.length
   const latestTurn = transcriptCount > 0 ? turns[transcriptCount - 1] : null
 
+  async function handleConnect() {
+    setTurns([])
+    setSavedSession(null)
+    setSaveState("idle")
+    setSaveError(null)
+    setSessionStartedAt(new Date().toISOString())
+
+    try {
+      await connect()
+    } catch (error) {
+      setSessionStartedAt(null)
+      setSaveState("error")
+      setSaveError(error instanceof Error ? error.message : "Failed to start the live session.")
+    }
+  }
+
+  async function handleDisconnect() {
+    const endedAt = new Date().toISOString()
+    const turnsToPersist = turns
+      .filter((turn) => turn.text.trim().length > 0)
+      .map((turn) => ({
+        id: turn.id,
+        role: turn.role,
+        text: turn.text,
+        status: turn.status,
+      }))
+
+    disconnect()
+    setSessionStartedAt(null)
+
+    if (!sessionStartedAt || turnsToPersist.length === 0) {
+      setSaveState("idle")
+      return
+    }
+
+    setSaveState("saving")
+    setSaveError(null)
+
+    try {
+      const response = await fetch("/api/sessions/finalize", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          startedAt: sessionStartedAt,
+          endedAt,
+          turns: turnsToPersist,
+        }),
+      })
+
+      const data = (await response.json()) as FinalizeSessionResponse | { error?: string }
+
+      if (!response.ok) {
+        throw new Error("error" in data ? data.error || "Failed to finalize session." : "Failed to finalize session.")
+      }
+
+      setSavedSession(data as FinalizeSessionResponse)
+      setSaveState("saved")
+    } catch (error) {
+      setSaveState("error")
+      setSaveError(error instanceof Error ? error.message : "Failed to finalize session.")
+    }
+  }
+
   return (
-    <main className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,#22304c_0%,#11161f_30%,#090c12_68%,#05070b_100%)] text-[#F4F7FB]">
-      <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-5 py-6 sm:px-8 lg:px-10">
+    <main className="min-h-full overflow-hidden bg-[radial-gradient(circle_at_top,#22304c_0%,#11161f_30%,#090c12_68%,#05070b_100%)] text-[#F4F7FB]">
+      <div className="mx-auto flex min-h-full w-full max-w-6xl flex-col px-5 py-6 sm:px-8 lg:px-10">
         <div className="flex items-center justify-between border-b border-white/10 pb-4">
           <div>
-            <p className="text-[11px] uppercase tracking-[0.35em] text-[#8EA5C2]">Companion Journal</p>
+            <p className="text-[11px] uppercase tracking-[0.35em] text-[#8EA5C2]">Live Session</p>
             <h1 className="mt-2 text-2xl font-semibold tracking-[0.04em] text-white sm:text-3xl">
               Voice Reflection Console
             </h1>
@@ -92,7 +163,7 @@ export default function Home() {
 
               <div className="flex flex-1 flex-col items-center justify-center py-10">
                 <button
-                  onClick={connected ? disconnect : connect}
+                  onClick={connected ? handleDisconnect : handleConnect}
                   disabled={connecting}
                   className={`group relative flex h-44 w-44 items-center justify-center rounded-full border text-center transition-all duration-300 sm:h-52 sm:w-52 ${
                     connected
@@ -138,6 +209,82 @@ export default function Home() {
                     </p>
                   </div>
                 </div>
+
+                <div className="mt-8 w-full max-w-xl rounded-[24px] border border-white/10 bg-white/[0.05] p-5">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-[11px] uppercase tracking-[0.28em] text-[#7D93AE]">Session Save</p>
+                      <h2 className="mt-2 text-xl font-semibold text-white">Phase 2 finalize flow</h2>
+                    </div>
+
+                    <span
+                      className={`rounded-full border px-3 py-1 text-xs ${
+                        saveState === "saved"
+                          ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-200"
+                          : saveState === "saving"
+                            ? "border-[#7DA8FF]/30 bg-[#7DA8FF]/10 text-[#DDE9FF]"
+                            : saveState === "error"
+                              ? "border-amber-400/30 bg-amber-400/10 text-amber-200"
+                              : "border-white/10 bg-white/[0.04] text-[#B7C5D8]"
+                      }`}
+                    >
+                      {saveState === "saved"
+                        ? "Saved"
+                        : saveState === "saving"
+                          ? "Saving"
+                          : saveState === "error"
+                            ? "Needs attention"
+                            : "Waiting"}
+                    </span>
+                  </div>
+
+                  <div className="mt-4 text-sm leading-7 text-[#C9D5E2]">
+                    {saveState === "idle" && (
+                      <p>When you stop a live session, we now save the raw transcript, generate a durable summary, and refresh the rolling profile memory.</p>
+                    )}
+
+                    {saveState === "saving" && (
+                      <p>Saving the session, generating a summary, and updating profile memory now.</p>
+                    )}
+
+                    {saveState === "error" && (
+                      <p className="text-amber-100">{saveError ?? "The session could not be finalized."}</p>
+                    )}
+
+                    {saveState === "saved" && savedSession && (
+                      <div className="space-y-3">
+                        <p>
+                          Session saved as <span className="font-medium text-white">{savedSession.sessionId}</span>.
+                        </p>
+                        <p>
+                          {savedSession.summary
+                            ? savedSession.summary.summary
+                            : "The raw session was saved, but the summary step still needs attention."}
+                        </p>
+                        <div className="flex flex-wrap gap-3">
+                          <Link
+                            href={`/sessions/${savedSession.sessionId}`}
+                            className="rounded-full border border-[#7DA8FF]/30 bg-[#7DA8FF]/10 px-4 py-2 text-sm text-[#DDE9FF] transition-colors hover:bg-[#7DA8FF]/20"
+                          >
+                            Open session
+                          </Link>
+                          <Link
+                            href="/sessions"
+                            className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-[#D7E1EE] transition-colors hover:bg-white/[0.08]"
+                          >
+                            View history
+                          </Link>
+                          <Link
+                            href="/profile"
+                            className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-[#D7E1EE] transition-colors hover:bg-white/[0.08]"
+                          >
+                            View profile
+                          </Link>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </section>
@@ -151,7 +298,15 @@ export default function Home() {
 
               <div className="text-right text-xs text-[#93A4B8]">
                 <p>{latestTurn ? `Latest: ${latestTurn.role}` : "Waiting for first turn"}</p>
-                <p>{connected ? "Session active" : connecting ? "Session starting" : "Session not started"}</p>
+                <p>
+                  {connected
+                    ? "Session active"
+                    : connecting
+                      ? "Session starting"
+                      : saveState === "saving"
+                        ? "Finalizing session"
+                        : "Session not started"}
+                </p>
               </div>
             </div>
 
