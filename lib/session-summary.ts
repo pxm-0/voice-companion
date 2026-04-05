@@ -168,7 +168,7 @@ export async function generateSessionSummary(
     throw new Error("OPENAI_API_KEY is required for summary generation.")
   }
 
-  const model = process.env.OPENAI_SUMMARY_MODEL || "gpt-4.1-mini"
+  const model = process.env.OPENAI_SUMMARY_MODEL || "gpt-5.4-nano"
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",

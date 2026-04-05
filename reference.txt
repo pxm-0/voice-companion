@@ -1,0 +1,418 @@
+🧠 Companion Journal App — Dev Spec
+0. Stack Assumptions
+Frontend: Next.js (App Router)
+
+
+Realtime: WebRTC (OpenAI Realtime API)
+
+
+Model: gpt-realtime-mini
+
+
+Backend (optional): lightweight API routes
+
+
+Storage: SQLite (start) → upgrade later
+
+
+
+⚙️ 1. CORE FLOW
+Realtime Session Lifecycle
+initSession()
+↓
+connectWebRTC()
+↓
+startAudioStream()
+↓
+handleEvents()
+↓
+maintainSession()
+
+Event Flow
+onUserSpeech → audio stream
+↓
+model processes
+↓
+onAssistantAudio → playback
+↓
+onTranscript → trigger logic
+
+📁 2. FILE STRUCTURE
+/app/realtime
+  client.ts           // WebRTC setup + connection
+  audio.ts            // mic + playback control
+  handlers.ts         // event listeners
+
+/lib
+  brain.ts            // builds system instructions
+  memory.ts           // store/retrieve memory
+  extractor.ts        // memory extraction
+  state.ts            // emotion + intent detection
+  turn.ts             // turn manager
+  timing.ts           // silence + delay logic
+
+/types
+  memory.ts
+  session.ts
+
+🔌 3. REALTIME CLIENT
+client.ts
+Responsibilities
+create WebRTC connection
+
+
+manage session
+
+
+send/receive events
+
+
+
+Interface
+initRealtimeSession(): Promise<void>
+
+sendAudioChunk(chunk: Float32Array): void
+
+sendEvent(event: RealtimeEvent): void
+
+updateSession(instructions: string): void
+
+closeSession(): void
+
+Session Update
+sendEvent({
+  type: "session.update",
+  session: {
+    instructions
+  }
+})
+
+🎧 4. AUDIO LAYER
+audio.ts
+Input
+startMicStream(onChunk: (chunk) => void)
+stopMicStream()
+
+Output
+playAudioChunk(chunk: ArrayBuffer)
+stopAudioPlayback()
+
+Requirements
+low latency streaming
+
+
+immediate interruption support
+
+
+
+📡 5. EVENT HANDLERS
+handlers.ts
+Core Events
+onTranscript(text: string)
+onAssistantResponse(text: string)
+onAudioChunk(chunk)
+onUserInterrupt()
+onSilence()
+
+Main Pipeline
+onTranscript(text) {
+  const state = detectState(text)
+
+  maybeExtractMemory(text, state)
+
+  turnManager({
+    text,
+    state
+  })
+}
+
+🧠 6. STATE DETECTION
+state.ts
+type State = {
+  emotion: "low" | "neutral" | "high"
+  intent: "vent" | "reflect" | "ask" | "casual"
+}
+
+API
+detectState(text: string): State
+
+Implementation (v1)
+rule-based OR
+
+
+lightweight model (optional)
+
+
+
+🔁 7. TURN MANAGER
+turn.ts
+Purpose
+Controls:
+when to respond
+
+
+how to respond
+
+
+whether to ask questions
+
+
+
+Interface
+handleTurn({
+  text,
+  state,
+  mode
+})
+
+Logic
+if (userInterrupting) stopAudio()
+
+if (state.intent === "vent") {
+  respondReflectively()
+}
+
+if (mode === "journal") {
+  suppressRealtimeResponse()
+}
+
+⏱️ 8. TIMING SYSTEM
+timing.ts
+Responsibilities
+silence detection
+
+
+response delay
+
+
+pacing
+
+
+
+Interface
+startSilenceTimer(onSilence: () => void)
+
+getResponseDelay(state: State, mode: Mode): number
+
+Example
+if (state.emotion === "high") delay = 800ms
+else delay = 200ms
+
+🎭 9. MODE SYSTEM
+Mode Type
+type Mode = "reflective" | "companion" | "journal"
+
+brain.ts
+Build Instructions
+buildInstructions({
+  mode,
+  memory
+}): string
+
+Example Output
+You are a natural voice companion.
+
+Mode: reflective
+- Ask at most one question
+- Keep responses short
+- Mirror emotions
+
+Relevant context:
+- feels stuck despite effort
+
+🧠 10. MEMORY SYSTEM
+types/memory.ts
+type Memory = {
+  id: string
+  type: "emotion" | "reflection" | "preference"
+  value: string
+  createdAt: number
+}
+
+memory.ts
+API
+addMemory(memory: Memory): void
+
+getRecentMemories(limit: number): Memory[]
+
+getRelevantMemories(): Memory[] // v1 = recent
+
+Storage
+SQLite OR JSON file
+
+
+no embeddings (v1)
+
+
+
+🧪 11. MEMORY EXTRACTION
+extractor.ts
+Interface
+extractMemory(text: string): Promise<Memory | null>
+
+Prompt (internal)
+Extract at most 1 meaningful memory.
+
+Focus on:
+- emotion
+- belief
+- pattern
+
+Return JSON:
+{ type, value }
+
+Rules
+run after silence
+
+
+skip if low signal
+
+
+max 1 memory per turn
+
+
+
+🧾 12. JOURNAL SYSTEM
+journal.ts (add this)
+Interface
+generateJournalEntry(transcript: string[]): Promise<string>
+
+Output Format
+Date
+
+Emotional summary
+
+Key reflections
+
+Patterns
+
+Trigger
+manual OR
+
+
+end of session
+
+
+
+🔄 13. MEMORY INJECTION
+brain.ts (continued)
+const memories = getRelevantMemories().slice(0, 3)
+
+Injection Format
+Relevant context (use subtly):
+- ...
+- ...
+
+Update Strategy
+if (turnCount % 3 === 0 || topicShift) {
+  updateSession()
+}
+
+🛡️ 14. SAFETY LAYER
+rules.ts (optional)
+Constraints
+no diagnosis
+
+
+no absolutes
+
+
+no escalation
+
+
+
+Applied via:
+system instructions
+
+
+optional filters
+
+
+
+🔁 15. SESSION CONTINUITY
+On Session Start
+const memories = getRecentMemories(3)
+
+updateSession(buildInstructions({ mode, memory: memories }))
+
+⚠️ 16. EDGE CASES
+Must Handle
+user interrupts assistant
+
+
+silence/no input
+
+
+connection drops
+
+
+delayed responses
+
+
+
+Behavior
+onInterrupt → stopAudioPlayback()
+
+onDisconnect → fallback UI / reconnect
+
+onDelay → show subtle indicator
+
+🚀 17. BUILD ORDER
+Phase 1
+WebRTC connection
+
+
+mic + audio playback
+
+
+basic conversation loop
+
+
+
+Phase 2
+system instructions
+
+
+mode switching
+
+
+
+Phase 3
+transcript handling
+
+
+silence detection
+
+
+
+Phase 4
+memory extraction + storage
+
+
+memory injection
+
+
+
+Phase 5
+turn manager
+
+
+timing system
+
+
+
+Phase 6
+journal output
+
+
+
+🧠 FINAL SYSTEM MODEL
+You are building:
+Realtime Voice Loop
++ Event-Driven Logic Layer
++ Lightweight Memory System
++ Behavioral Modes
++ Journal Output
+
+
+
