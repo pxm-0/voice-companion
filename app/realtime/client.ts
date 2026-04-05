@@ -18,6 +18,8 @@ let sessionVersion = 0
 let lastUserText = ""
 let finalText = ""
 
+let turnCountSinceUpdate = 0
+
 function nextTurnId(role: "user" | "assistant") {
   turnCounter += 1
   return `${role}-${Date.now()}-${turnCounter}`
@@ -187,6 +189,9 @@ function handleServerEvent(data: Record<string, unknown>) {
   } catch (err) {
     console.error("Memory extraction failed", err)
   }
+
+    
+
   }
 }
 
