@@ -1,16 +1,33 @@
 import { useState } from "react"
-import { initRealTime } from "./client"
+import { initRealTime, stopRealTime } from "./client"
 
 export function useRealTime() {
     const [connected, setConnected] = useState(false)
-    
+    const [connecting, setConnecting] = useState(false)
+
     const connect = async () => {
-        await initRealTime()
-        setConnected(true)
+        if (connected || connecting) return
+
+        setConnecting(true)
+
+        try {
+            await initRealTime()
+            setConnected(true)
+        } finally {
+            setConnecting(false)
+        }
     }
 
-    return { 
+    const disconnect = () => {
+        stopRealTime()
+        setConnected(false)
+        setConnecting(false)
+    }
+
+    return {
         connected,
+        connecting,
         connect,
+        disconnect
      }
 }

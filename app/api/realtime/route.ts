@@ -1,43 +1,59 @@
-import { error } from "console"
+const REALTIME_MODEL = "gpt-realtime-mini"
 
 export async function POST(req: Request) {
   try {
-     const { sdp } = await req.json()
+    const { sdp } = await req.json()
 
-    const response = await fetch("https://api.openai.com/v1/realtime?model=gpt-realtime-mini", {
+    if (typeof sdp !== "string" || !sdp.trim()) {
+      return Response.json({ error: "Missing SDP offer" }, { status: 400 })
+    }
+
+    if (!process.env.OPENAI_API_KEY) {
+      return Response.json({ error: "Server is missing OPENAI_API_KEY" }, { status: 500 })
+    }
+
+    const sessionConfig = {
+      type: "realtime",
+      model: REALTIME_MODEL,
+      audio: {
+        input: {
+          transcription: {
+            model: "gpt-4o-mini-transcribe",
+          },
+        },
+        output: {
+          voice: "marin",
+        },
+      },
+    }
+
+    const form = new FormData()
+    form.set("sdp", sdp)
+    form.set("session", JSON.stringify(sessionConfig))
+
+    const response = await fetch("https://api.openai.com/v1/realtime/calls", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
-        "Content-Type": "application/sdp",
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
       },
-      body: sdp,
+      body: form,
     })
 
-    let text = await response.text()
+    const text = await response.text()
 
-    // Clean and normalize SDP
-    text = text.trim()
+    if (!response.ok) {
+      console.error("OpenAI Realtime API error:", text)
+      return Response.json({ error: text || "OpenAI API request failed" }, { status: 502 })
+    }
 
-    // Normalize line endings to strict \r\n
-    let normalizedSdp = text.replace(/\r?\n/g, "\r\n")
-
-    // Ensure it ends with a final newline (required by some browsers)
+    let normalizedSdp = text.trim().replace(/\r?\n/g, "\r\n")
     if (!normalizedSdp.endsWith("\r\n")) {
       normalizedSdp += "\r\n"
     }
 
-    console.log("OpenAI Response (SDP):", text)
-
-    if (!response.ok) {
-      console.error("OpenAI API error:", text)
-      return new Response(text, { status: 502 })
-    }
-
-    // OpenAI returns raw SDP, not JSON
     return Response.json({ sdp: normalizedSdp })
-
   } catch (error) {
-    console.error("Error in /api/realtime: ", error)
-    return Response.json("Internal Server Error", { status: 500 })
+    console.error("Error in /api/realtime:", error)
+    return Response.json({ error: "Internal Server Error" }, { status: 500 })
   }
 }
