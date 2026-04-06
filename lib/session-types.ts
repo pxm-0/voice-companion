@@ -23,6 +23,7 @@ export type SessionArtifact = {
   mood: string
   themes: string[]
   rapidLogBullets: string[]
+  patternSummary: string | null
 }
 
 export type SessionTask = {
@@ -42,6 +43,7 @@ export type ProfileMemoryView = {
   lastSeenAt: string
   pinned: boolean
   active: boolean
+  weight?: number
 }
 
 export type SessionCard = {

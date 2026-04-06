@@ -1,28 +1,19 @@
-import type { TranscriptTurn } from "./types"
+/**
+ * app/realtime/client.ts — Pure WebRTC transport layer
+ *
+ * Responsibilities: peer connection, SDP exchange, audio tracks, data channel.
+ * All event handling and behavior logic lives in handlers.ts.
+ */
 
-const DEBUG_REALTIME_EVENTS = false
+import { handleServerEvent, resetAssistantState, setCurrentMode } from "./handlers"
+import type { CompanionMode } from "@/lib/session-types"
 
 let pc: RTCPeerConnection | null = null
 let dc: RTCDataChannel | null = null
 let localStream: MediaStream | null = null
 let audioEl: HTMLAudioElement | null = null
 let pendingRealtimeEvents: string[] = []
-
-let turnCounter = 0
-let activeAssistantTurnId: string | null = null
-let assistantTextBuffer = ""
-let assistantHasAudioTranscript = false
-let assistantTurnFinalized = false
 let sessionVersion = 0
-
-function nextTurnId(role: "user" | "assistant") {
-  turnCounter += 1
-  return `${role}-${Date.now()}-${turnCounter}`
-}
-
-function emitTranscriptEvent(type: "transcript:update" | "transcript:final", detail: TranscriptTurn) {
-  window.dispatchEvent(new CustomEvent<TranscriptTurn>(type, { detail }))
-}
 
 function flushPendingRealtimeEvents() {
   if (!dc || dc.readyState !== "open" || pendingRealtimeEvents.length === 0) {
@@ -48,128 +39,22 @@ export function sendRealtimeEvent(event: Record<string, unknown>) {
 }
 
 export function updateRealtimeSessionInstructions(instructions: string) {
-  if (!instructions.trim()) {
-    return
-  }
+  if (!instructions.trim()) return
 
   sendRealtimeEvent({
     type: "session.update",
-    session: {
-      instructions,
-    },
+    session: { instructions },
   })
 }
 
-function ensureAssistantTurn() {
-  if (activeAssistantTurnId) return activeAssistantTurnId
-
-  activeAssistantTurnId = nextTurnId("assistant")
-  assistantTextBuffer = ""
-  assistantHasAudioTranscript = false
-  assistantTurnFinalized = false
-
-  return activeAssistantTurnId
+export function updateRealtimeMode(mode: CompanionMode) {
+  setCurrentMode(mode)
 }
 
-function emitAssistantUpdate() {
-  const id = ensureAssistantTurn()
-  emitTranscriptEvent("transcript:update", {
-    id,
-    role: "assistant",
-    text: assistantTextBuffer,
-    status: "streaming",
-  })
-}
-
-function finalizeAssistantTurn(finalText?: string) {
-  if (!activeAssistantTurnId || assistantTurnFinalized) return
-
-  if (typeof finalText === "string" && finalText.trim().length > 0) {
-    assistantTextBuffer = finalText
-  }
-
-  emitTranscriptEvent("transcript:final", {
-    id: activeAssistantTurnId,
-    role: "assistant",
-    text: assistantTextBuffer,
-    status: "final",
-  })
-
-  assistantTurnFinalized = true
-  activeAssistantTurnId = null
-  assistantTextBuffer = ""
-  assistantHasAudioTranscript = false
-}
-
-function resetAssistantState() {
-  activeAssistantTurnId = null
-  assistantTextBuffer = ""
-  assistantHasAudioTranscript = false
-  assistantTurnFinalized = false
-}
-
-function handleServerEvent(data: Record<string, unknown>) {
-  const eventType = typeof data.type === "string" ? data.type : ""
-
-  if (DEBUG_REALTIME_EVENTS) {
-    console.log("Realtime event:", eventType, data)
-  }
-
-  if (eventType === "conversation.item.input_audio_transcription.completed") {
-    const text =
-      typeof data.transcript === "string"
-        ? data.transcript
-        : typeof data.text === "string"
-          ? data.text
-          : ""
-    if (!text || !text.trim()) return
-
-    emitTranscriptEvent("transcript:final", {
-      id: nextTurnId("user"),
-      role: "user",
-      text,
-      status: "final",
-    })
-    return
-  }
-
-  if (eventType === "response.output_audio_transcript.delta") {
-    const delta = typeof data.delta === "string" ? data.delta : ""
-    if (!delta) return
-
-    ensureAssistantTurn()
-    assistantHasAudioTranscript = true
-    assistantTurnFinalized = false
-    assistantTextBuffer += delta
-    emitAssistantUpdate()
-    return
-  }
-
-  if (eventType === "response.output_text.delta") {
-    if (assistantHasAudioTranscript) return
-
-    const delta = typeof data.delta === "string" ? data.delta : ""
-    if (!delta) return
-
-    ensureAssistantTurn()
-    assistantTurnFinalized = false
-    assistantTextBuffer += delta
-    emitAssistantUpdate()
-    return
-  }
-
-  if (eventType === "response.output_audio_transcript.done") {
-    const transcript = typeof data.transcript === "string" ? data.transcript : undefined
-    finalizeAssistantTurn(transcript)
-    return
-  }
-
-  if (eventType === "response.done") {
-    finalizeAssistantTurn()
-  }
-}
-
-export async function initRealTime(options?: { instructions?: string }) {
+export async function initRealTime(options?: {
+  instructions?: string
+  mode?: CompanionMode
+}) {
   const initVersion = ++sessionVersion
 
   if (pc || localStream || dc) {
@@ -179,6 +64,10 @@ export async function initRealTime(options?: { instructions?: string }) {
   const peerConnection = new RTCPeerConnection()
   pc = peerConnection
   resetAssistantState()
+
+  if (options?.mode) {
+    setCurrentMode(options.mode)
+  }
 
   const nextAudioEl = document.createElement("audio")
   nextAudioEl.autoplay = true
@@ -193,23 +82,22 @@ export async function initRealTime(options?: { instructions?: string }) {
 
   const dataChannel = peerConnection.createDataChannel("oai-events")
   dc = dataChannel
+
   dataChannel.onopen = () => {
     flushPendingRealtimeEvents()
-
     if (options?.instructions?.trim()) {
       updateRealtimeSessionInstructions(options.instructions)
     }
   }
+
   dataChannel.onmessage = (event) => {
     try {
-      const data: unknown = JSON.parse(event.data)
+      const data: unknown = JSON.parse(event.data as string)
       if (data && typeof data === "object") {
         handleServerEvent(data as Record<string, unknown>)
       }
-    } catch (error) {
-      if (DEBUG_REALTIME_EVENTS) {
-        console.error("Failed to parse data channel message:", error)
-      }
+    } catch {
+      // Silently ignore malformed messages
     }
   }
 
@@ -230,9 +118,7 @@ export async function initRealTime(options?: { instructions?: string }) {
 
     const res = await fetch("/api/realtime", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         sdp: offer.sdp,
         instructions: options?.instructions,
@@ -243,7 +129,7 @@ export async function initRealTime(options?: { instructions?: string }) {
 
     if (!res.ok || !data?.sdp) {
       console.error("Invalid SDP response", data)
-      throw new Error(data?.error || "No SDP returned from server")
+      throw new Error((data?.error as string) || "No SDP returned from server")
     }
 
     if (sessionVersion !== initVersion || pc !== peerConnection) {
@@ -257,10 +143,7 @@ export async function initRealTime(options?: { instructions?: string }) {
     }
 
     await peerConnection.setRemoteDescription(
-      new RTCSessionDescription({
-        type: "answer",
-        sdp: data.sdp,
-      }),
+      new RTCSessionDescription({ type: "answer", sdp: data.sdp as string }),
     )
   } catch (error) {
     if (sessionVersion === initVersion) {
@@ -297,5 +180,4 @@ export function stopRealTime() {
 
   resetAssistantState()
   pendingRealtimeEvents = []
-  console.log("Real-time connection stopped")
 }

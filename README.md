@@ -1,87 +1,94 @@
-🧠 Voice Companion
+# Companion Journal
 
-Realtime voice-based AI companion with memory, modes, and journaling.
+A cozy voice journaling app with a continuously evolving second brain.
 
-Built for natural, low-latency conversations that evolve over time.
+## What it does
 
-⸻
+Companion Journal lets you talk through your day, your thoughts, or a problem — and quietly turns that conversation into a structured journal entry that remembers who you are.
 
-✨ Features
-	•	🎙️ Real-time voice conversation (WebRTC)
-	•	⚡ Low-latency streaming (gpt-realtime-mini)
-	•	✂️ Interrupt support (barge-in)
-	•	🧾 Live transcript (user + assistant)
-	•	🧠 Memory system (in progress)
-	•	🎭 Modes: reflective / companion / journal
+Each session produces:
+- A vivid journal artifact (title, summary, bullet-journal bullets, key themes, mood)
+- Concrete action items extracted from what you actually committed to
+- Durable memory items that evolve over time
 
-⸻
+The app builds a three-layer understanding of you:
+1. **Atomic memory** — fast-changing signals from each conversation
+2. **Pattern summaries** — what each session's emotional arc looked like
+3. **Profile** — a slow-evolving paragraph that captures your tendencies, preferences, and patterns
 
-🏗️ Architecture
+## Tech stack
 
-Mic → WebRTC → Realtime Model → Audio Out
-             ↓
-         Event Stream
-             ↓
-    Transcript Layer
-             ↓
-      Memory System (WIP)
+- **Next.js** (App Router)
+- **OpenAI Realtime API** (WebRTC voice session)
+- **Prisma + SQLite** (local persistence)
+- **TypeScript** throughout
 
+## Models
 
-⸻
+| Role | Model |
+|---|---|
+| Live voice conversation | `gpt-realtime-mini` |
+| Mid-session signal extraction | `gpt-5.4-nano` |
+| Post-session summary + memory | configurable via `OPENAI_SUMMARY_MODEL` |
 
-🚀 Getting Started
+## Getting started
 
-1. Clone
+Copy the example env file and fill in your API key:
 
-git clone https://github.com/pxm-0/voice-companion.git
-cd voice-companion
+```bash
+cp .env.example .env
+```
 
-2. Install
+Set up the database:
 
-npm install
+```bash
+npx prisma db push
+npx prisma generate
+```
 
-3. Environment
+Run the dev server:
 
-Create .env.local:
-
-OPENAI_API_KEY=your_api_key_here
-
-4. Run
-
+```bash
 npm run dev
+```
 
+Open [http://localhost:3000](http://localhost:3000).
 
-⸻
+## Environment variables
 
-🧠 How It Works
-	•	Audio is streamed via WebRTC to a realtime model
-	•	The model responds with audio + text events
-	•	Events are processed through a client-side pipeline
-	•	Transcripts are captured and prepared for memory extraction
+| Variable | Required | Description |
+|---|---|---|
+| `OPENAI_API_KEY` | Yes | OpenAI API key |
+| `DATABASE_URL` | Yes | SQLite path (e.g. `file:./dev.db`) |
+| `OPENAI_SUMMARY_MODEL` | No | Model for post-session summaries (default: `gpt-5.4-nano`) |
 
-⸻
+## Companion modes
 
-🛣️ Roadmap
-	•	Realtime voice loop
-	•	Interrupt handling
-	•	Transcript streaming
-	•	Memory extraction
-	•	Memory storage
-	•	Memory injection
-	•	Journal generation
-	•	Turn manager
+| Mode | Behavior |
+|---|---|
+| Think With Me | Collaborative, grounded — thinks alongside you |
+| Reflect | Gentle, emotionally attuned — mirrors and holds space |
+| Journal Quietly | Minimal — mostly listens, stays out of the way |
 
-⸻
+## Architecture
 
-⚠️ Notes
-	•	Requires microphone permissions
-	•	Uses OpenAI Realtime API (SDP over WebRTC)
-	•	Designed for low-latency conversational UX
+```
+app/realtime/
+  client.ts      — pure WebRTC transport
+  handlers.ts    — event routing + behavior layer integration
+  useRealtime.ts — React hook with live extraction + turn guidance
 
-⸻
+lib/
+  brain.ts           — builds 3-layer system instructions
+  memory.ts          — upsert/decay/read for ProfileMemory
+  extractor.ts       — atomic signal extraction (gpt-5.4-nano)
+  state.ts           — emotion + intent detection
+  turn.ts            — turn manager: response guidance per state
+  timing.ts          — silence detection + delay logic
+  session-summary.ts — post-session artifact generation
+  session-finalizer.ts — full session save + memory pipeline
+```
 
-📄 License
+## License
 
 MIT
-:::
-

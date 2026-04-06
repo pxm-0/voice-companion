@@ -52,7 +52,7 @@ export type MemoryForBrain = {
  * - Pinned memories are never modified by this function
  */
 export async function upsertMemories(
-  sessionId: string,
+  sessionId: string | null,
   seenAt: Date,
   memories: MemoryInput[],
 ): Promise<void> {
@@ -82,7 +82,7 @@ export async function upsertMemories(
         await tx.profileMemory.update({
           where: { id: existing.id },
           data: {
-            sourceSessionId: sessionId,
+            ...(sessionId ? { sourceSessionId: sessionId } : {}),
             lastSeenAt: seenAt,
             active: true,
             weight: newWeight,

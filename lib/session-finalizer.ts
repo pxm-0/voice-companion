@@ -101,6 +101,7 @@ function serializeProfileMemories(memories: Array<{
     lastSeenAt: memory.lastSeenAt.toISOString(),
     pinned: memory.pinned,
     active: memory.active,
+    weight: memory.weight,
   }))
 }
 
@@ -123,6 +124,7 @@ function serializeArtifact(summary: {
   mood: string
   keyThemesJson: string
   rapidLogBulletsJson: string
+  patternSummary?: string | null
 } | null): SessionArtifact | null {
   if (!summary) {
     return null
@@ -134,6 +136,7 @@ function serializeArtifact(summary: {
     mood: summary.mood,
     themes: parseStoredStringArray(summary.keyThemesJson),
     rapidLogBullets: parseStoredStringArray(summary.rapidLogBulletsJson),
+    patternSummary: summary.patternSummary ?? null,
   }
 }
 
@@ -380,12 +383,13 @@ async function loadProfileStateForMutation() {
       where: {
         active: true,
       },
-      orderBy: [{ pinned: "desc" }, { lastSeenAt: "desc" }, { content: "asc" }],
+      orderBy: [{ pinned: "desc" }, { weight: "desc" }, { lastSeenAt: "desc" }],
       select: {
         id: true,
         kind: true,
         content: true,
         lastSeenAt: true,
+        weight: true,
         pinned: true,
         active: true,
       },
@@ -534,6 +538,7 @@ export async function finalizeSession(body: unknown): Promise<FinalizeSessionRes
         mood: generated.mood,
         themes: generated.keyThemes,
         rapidLogBullets: generated.rapidLogBullets,
+        patternSummary: generated.patternSummary,
       },
       tasks: tasks.map((task) => serializeTask(task)),
       profile,
