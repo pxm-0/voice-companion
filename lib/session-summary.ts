@@ -26,6 +26,7 @@ export type SummaryGenerationResult = {
   rapidLogBullets: string[]
   actionItems: string[]
   mood: string
+  patternSummary: string
   profileSummary: string
   memories: Array<{
     kind: ProfileMemoryKind
@@ -42,47 +43,70 @@ const SUMMARY_JSON_SCHEMA = {
     properties: {
       title: {
         type: "string",
-        description: "A short, specific title for the saved session entry.",
+        description:
+          "A short, vivid title that captures the emotional core of this session. Be specific — avoid generic titles like 'Monday Check-in' or 'Session Summary'. Examples: 'Running on Empty Again', 'Finally Said It Out Loud', 'Spinning Wheels on the Project'.",
       },
       sessionSummary: {
         type: "string",
-        description: "A concise human-readable summary of the completed journal session.",
+        description:
+          "A 2-3 sentence human summary in first-person voice, like a journal entry. Warm, grounded, specific to what actually happened. Not a transcript recap.",
       },
       keyThemes: {
         type: "array",
         items: { type: "string" },
         minItems: 1,
-        maxItems: 5,
+        maxItems: 4,
       },
       rapidLogBullets: {
         type: "array",
+        description:
+          "Bullet-journal style bullets. Short, vivid, action-verb or noun-first. Examples: 'woke up foggy, pushed through emails anyway', 'skipped lunch again', 'good call with the team despite low energy'.",
         items: { type: "string" },
         minItems: 1,
-        maxItems: 6,
+        maxItems: 5,
       },
       actionItems: {
         type: "array",
+        description:
+          "Only include items where the user expressed a concrete next step, decision, or commitment. Skip vague intentions. Max 3.",
         items: { type: "string" },
-        maxItems: 5,
+        maxItems: 3,
       },
       mood: {
         type: "string",
-        description: "A short mood label that captures the emotional tone of the session.",
+        description:
+          "A 1-3 word mood label. Specific and honest — not 'reflective' or 'positive'. Examples: 'drained but grounded', 'quietly stuck', 'relieved and foggy'.",
+      },
+      patternSummary: {
+        type: "string",
+        description:
+          "One sentence capturing the key pattern or emotional arc of this session. First-person, past tense. Example: 'This session, the user was mentally drained from work, struggled to start tasks, and preferred low-pressure conversation.'",
       },
       profileSummary: {
         type: "string",
-        description: "A rolling single-paragraph profile summary for future sessions.",
+        description:
+          "A rolling single-paragraph profile summary that incorporates this session's patterns into the user's ongoing identity. Stable, cumulative, third-person. Focus on recurring tendencies, preferences, and emotional rhythms.",
       },
       memories: {
         type: "array",
-        maxItems: 8,
+        description:
+          "Durable memory items worth storing long-term. Only save stable, recurring signals — not one-off mentions. Write content in normalized third-person present-tense form. Use exactly the same wording you would use if you observed this signal again — consistency is critical for deduplication. Example: 'tends to feel drained after long work sessions'. Max 5.",
+        maxItems: 5,
         items: {
           type: "object",
           additionalProperties: false,
           properties: {
             kind: {
               type: "string",
-              enum: ["IDENTITY", "PREFERENCE", "GOAL", "THEME", "RELATIONSHIP", "ROUTINE"],
+              enum: [
+                "IDENTITY",
+                "PREFERENCE",
+                "GOAL",
+                "THEME",
+                "RELATIONSHIP",
+                "ROUTINE",
+                "EMOTION",
+              ],
             },
             content: {
               type: "string",
@@ -99,6 +123,7 @@ const SUMMARY_JSON_SCHEMA = {
       "rapidLogBullets",
       "actionItems",
       "mood",
+      "patternSummary",
       "profileSummary",
       "memories",
     ],
@@ -118,12 +143,20 @@ function buildPrompt(input: SummaryGenerationInput) {
   return [
     "You are updating a cozy companion journal and second-brain system.",
     "Return JSON that matches the provided schema exactly.",
-    "The saved artifact should feel like a thoughtful bullet-journal entry, not a transcript dump.",
-    "Write with warm clarity and specificity.",
-    "Focus durable memory on stable preferences, goals, patterns, relationships, routines, or identity-level facts.",
-    "Do not save flimsy or one-off details as memory.",
-    "Only create action items when the user expressed a concrete next step or commitment.",
-    "Avoid therapy clichés, clinical framing, and generic safety disclaimers in the journal artifact.",
+    "",
+    "## Artifact quality rules",
+    "- Write with warm clarity and specificity — not clinical, not generic, not therapy-speak.",
+    "- The saved artifact should feel like a real bullet-journal entry, not a transcript dump.",
+    "- Titles should be vivid and specific to this session's emotional core.",
+    "- Rapid-log bullets: short, punchy, action-verb or noun-first. Sound like a human wrote them.",
+    "- Only capture action items when the user expressed a concrete commitment or next step.",
+    "- Avoid: 'you mentioned', 'the user expressed', therapy clichés, safety disclaimers.",
+    "",
+    "## Memory quality rules",
+    "- Only save memory items that reflect stable, recurring signals — not one-off events.",
+    "- Write memory content in normalized third-person form: 'tends to feel X when Y'.",
+    "- Use consistent wording — the same signal seen again should produce the exact same string.",
+    "- Be selective. 0-3 strong memories beats 5 weak ones. Max 5.",
     "",
     `Input type: ${input.inputType}`,
     `Mode: ${input.mode}`,
@@ -133,7 +166,7 @@ function buildPrompt(input: SummaryGenerationInput) {
     "Existing profile summary:",
     input.existingProfileSummary ?? "None yet.",
     "",
-    "Existing active memories:",
+    "Existing active memories (for context — do not repeat these verbatim unless reinforcing):",
     input.existingMemories.length > 0 ? normalizeMemories(input.existingMemories) : "None yet.",
     "",
     "Transcript:",
@@ -148,7 +181,8 @@ function isProfileMemoryKind(value: string): value is ProfileMemoryKind {
     value === "GOAL" ||
     value === "THEME" ||
     value === "RELATIONSHIP" ||
-    value === "ROUTINE"
+    value === "ROUTINE" ||
+    value === "EMOTION"
   )
 }
 
@@ -179,6 +213,13 @@ function assertSummaryPayload(data: unknown): asserts data is SummaryGenerationR
 
   if (typeof payload.mood !== "string" || payload.mood.trim().length === 0) {
     throw new Error("Missing mood in summary payload.")
+  }
+
+  if (
+    typeof payload.patternSummary !== "string" ||
+    payload.patternSummary.trim().length === 0
+  ) {
+    throw new Error("Missing patternSummary in summary payload.")
   }
 
   if (typeof payload.profileSummary !== "string" || payload.profileSummary.trim().length === 0) {
@@ -231,7 +272,7 @@ export async function generateSessionSummary(
         {
           role: "system",
           content:
-            "You produce structured JSON for a cozy journal companion app. Keep artifacts thoughtful, concise, and grounded in the user's actual words.",
+            "You produce structured JSON for a cozy journal companion app. Write artifacts that feel human, specific, and worth revisiting — like a real journal entry, not a session transcript.",
         },
         {
           role: "user",
@@ -278,6 +319,7 @@ export async function generateSessionSummary(
     rapidLogBullets: sanitizeStringArray(parsed.rapidLogBullets),
     actionItems: sanitizeStringArray(parsed.actionItems),
     mood: parsed.mood.trim(),
+    patternSummary: parsed.patternSummary.trim(),
     profileSummary: parsed.profileSummary.trim(),
     memories: parsed.memories.map((memory) => ({
       kind: memory.kind,

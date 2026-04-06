@@ -7,6 +7,7 @@ import {
   SessionTurnStatus,
 } from "@prisma/client"
 import { formatDate } from "@/lib/format-date"
+import { upsertMemories, decayMemories } from "@/lib/memory"
 import { prisma } from "@/lib/prisma"
 import { generateSessionSummary } from "@/lib/session-summary"
 import type {
@@ -88,6 +89,8 @@ function serializeProfileMemories(memories: Array<{
   kind: ProfileMemoryKind
   content: string
   lastSeenAt: Date
+  seenCount?: number
+  weight?: number
   pinned: boolean
   active: boolean
 }>): ProfileMemoryView[] {
@@ -462,6 +465,7 @@ export async function finalizeSession(body: unknown): Promise<FinalizeSessionRes
           keyThemesJson: JSON.stringify(generated.keyThemes),
           rapidLogBulletsJson: JSON.stringify(generated.rapidLogBullets),
           mood: generated.mood,
+          patternSummary: generated.patternSummary,
         },
       })
 
@@ -488,30 +492,6 @@ export async function finalizeSession(body: unknown): Promise<FinalizeSessionRes
         },
       })
 
-      for (const memory of generated.memories) {
-        await tx.profileMemory.upsert({
-          where: {
-            kind_content: {
-              kind: memory.kind,
-              content: memory.content,
-            },
-          },
-          update: {
-            sourceSessionId: session.id,
-            lastSeenAt: endedAt,
-            active: true,
-          },
-          create: {
-            kind: memory.kind,
-            content: memory.content,
-            sourceSessionId: session.id,
-            lastSeenAt: endedAt,
-            active: true,
-            pinned: false,
-          },
-        })
-      }
-
       await tx.session.update({
         where: {
           id: session.id,
@@ -522,6 +502,14 @@ export async function finalizeSession(body: unknown): Promise<FinalizeSessionRes
         },
       })
     })
+
+    // Upsert memories with weight evolution (outside transaction — uses its own tx internally)
+    if (generated.memories.length > 0) {
+      await upsertMemories(session.id, endedAt, generated.memories)
+    }
+
+    // Decay stale memories — non-blocking, failure is acceptable
+    decayMemories().catch(() => {})
 
     await pruneOldTranscripts()
 

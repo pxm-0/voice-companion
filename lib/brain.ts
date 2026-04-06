@@ -1,10 +1,12 @@
-import type { CompanionMode, ProfileMemoryView } from "@/lib/session-types"
+import { getMemoriesForBrain } from "@/lib/memory"
+import type { CompanionMode } from "@/lib/session-types"
 
 type BuildInstructionsInput = {
   mode: CompanionMode
   profileSummary: string | null
-  memories: Array<Pick<ProfileMemoryView, "content" | "kind" | "pinned">>
-  safetyStyle?: "crisis_only"
+  patternSummary?: string | null
+  /** @deprecated Pass memories via getMemoriesForBrain() or leave undefined to fetch internally */
+  memories?: Array<{ content: string; kind: string; pinned: boolean }>
 }
 
 const MODE_COPY: Record<
@@ -55,21 +57,26 @@ export function getModeDescription(mode: CompanionMode) {
   return MODE_COPY[mode].short
 }
 
-function getRelevantMemories(memories: BuildInstructionsInput["memories"]) {
-  return [...memories]
-    .sort((a, b) => Number(b.pinned) - Number(a.pinned))
-    .slice(0, 3)
-    .map((memory) => `${memory.kind.toLowerCase()}: ${memory.content}`)
-}
-
+/**
+ * Build system instructions for the realtime companion session.
+ *
+ * Memory is layered in three time scales:
+ * 1. Profile summary — slow-changing long-term identity
+ * 2. Pattern summary — medium stability, last session arc
+ * 3. Recent memory — fast-changing atomic signals (top 5 by weight)
+ */
 export function buildInstructions({
   mode,
   profileSummary,
-  memories,
-  safetyStyle = "crisis_only",
+  patternSummary,
+  memories = [],
 }: BuildInstructionsInput) {
-  const relevantMemories = getRelevantMemories(memories)
   const modeCopy = MODE_COPY[mode]
+
+  const memoryLines =
+    memories.length > 0
+      ? memories.map((m) => `- ${m.kind.toLowerCase()}: ${m.content}`)
+      : ["- None yet."]
 
   return [
     "You are Companion Journal, a cozy and intelligent voice companion.",
@@ -83,16 +90,34 @@ export function buildInstructions({
     "- Avoid therapist-speak, boilerplate disclaimers, and generic referrals.",
     "- Do not diagnose, moralize, or speak in absolutes.",
     "- Keep responses concise enough for voice unless the user clearly wants more depth.",
-    "- Use the user's context subtly rather than reciting it back verbatim.",
+    "- Use the user's context subtly — do not recite it back verbatim.",
     "",
-    safetyStyle === "crisis_only"
-      ? "Safety: only suggest outside help or urgent escalation if the user shows clear signs of immediate danger or acute safety risk."
-      : "Safety: stay supportive and careful.",
+    "Safety: only suggest outside help or urgent escalation if the user shows clear signs of immediate danger or acute safety risk.",
     "",
-    "Rolling profile summary:",
+    "Profile (stable identity):",
     profileSummary ?? "No profile summary yet.",
     "",
-    "Relevant context to use subtly:",
-    ...(relevantMemories.length > 0 ? relevantMemories.map((memory) => `- ${memory}`) : ["- None yet."]),
+    "Pattern (recent arc):",
+    patternSummary ?? "No recent pattern summary yet.",
+    "",
+    "Recent context (use subtly):",
+    ...memoryLines,
   ].join("\n")
+}
+
+/**
+ * Build instructions with memory fetched directly from the DB.
+ * Preferred for session initialization where you have DB access.
+ */
+export async function buildInstructionsWithMemory({
+  mode,
+  profileSummary,
+  patternSummary,
+}: {
+  mode: CompanionMode
+  profileSummary: string | null
+  patternSummary?: string | null
+}): Promise<string> {
+  const memories = await getMemoriesForBrain(5)
+  return buildInstructions({ mode, profileSummary, patternSummary, memories })
 }
