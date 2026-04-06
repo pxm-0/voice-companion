@@ -4,120 +4,107 @@ Last updated: 2026-04-06
 
 ## Project Snapshot
 
-Companion Journal is now beyond the "realtime demo" stage.
+Companion Journal is a cozy voice journaling app built on OpenAI Realtime WebRTC.
 
-The app currently does three important things well:
-- runs a live voice conversation over OpenAI Realtime WebRTC
-- turns completed sessions into saved journal artifacts
-- builds a lightweight second-brain layer from summaries, tasks, and durable memory
+The core architecture is now in place across three layers:
+- **Voice transport** — live WebRTC conversation with OpenAI Realtime
+- **Memory evolution** — atomic memory with weight/decay, pattern summaries, and a slow-changing profile
+- **Journal artifacts** — saved session entries with vivid titles, bullet-journal bullets, and structured action items
 
-The newest implemented product direction is a cozy `Today Hub` with visible companion modes:
-- `Think With Me`
-- `Reflect`
-- `Journal Quietly`
+The product direction is a cozy second-brain + journaling companion. Not a chatbot with memory. Not therapy-lite. A system that continuously evolves its understanding of the user.
 
-This phase keeps the voice transport intact and shifts the product toward a bullet-journal / second-brain experience.
+---
 
 ## What Exists Right Now
 
 ### Live voice flow
 - WebRTC voice session works through `/api/realtime`
-- user transcript events appear in the UI
-- assistant transcript streams and finalizes correctly
-- session instructions can be updated live through `session.update`
+- User transcript events appear in the UI
+- Assistant transcript streams and finalizes correctly
+- Session instructions are updated live through `session.update`
 
 ### Journal product flow
-- `/` is now a `Today Hub`
-- users can start a voice check-in or write a manual quick log
-- both paths feed the same save + summarize + memory pipeline
-- saved sessions show title, summary, mood, themes, rapid-log bullets, and tasks
-- raw transcripts are retained only for the latest 5 sessions
+- `/` is a `Today Hub`
+- Users can start a voice check-in or write a manual quick log
+- Both paths feed the same save + summarize + memory pipeline
+- Saved sessions show title, summary, mood, themes, rapid-log bullets, and tasks
+- Raw transcripts are retained only for the latest 5 sessions
+
+### Memory system (newly upgraded)
+- Each session runs `upsertMemories()` — same signal seen again → weight increases
+- Unused memories decay weekly (0.85^weeks) and deactivate below threshold 0.15
+- Brain instructions are now built from **3 ranked layers**:
+  1. Profile summary (slow-changing long-term identity)
+  2. Pattern summary (last session arc — medium stability)
+  3. Top 5 weighted memories (fast-changing atomic signals)
+- Memory content is normalized to stable third-person strings for exact-match deduplication
+- `EMOTION` is now a valid memory kind alongside: `IDENTITY`, `PREFERENCE`, `GOAL`, `THEME`, `RELATIONSHIP`, `ROUTINE`
 
 ### Second-brain flow
-- each saved session can update:
-  - rolling profile summary
-  - durable memory items
-  - action items/tasks
-- memory items can now be edited, pinned, or archived
-- session artifacts can be edited after generation
-- tasks can be edited and completed
+- Each saved session updates:
+  - Rolling profile summary
+  - Pattern summary (new: "This session, the user felt...")
+  - Durable memory items with weight evolution
+  - Action items/tasks
+- Memory items can be edited, pinned, or archived
+- Session artifacts can be edited after generation
+- Tasks can be edited and completed
+
+---
 
 ## Product Direction
 
-The current product is aiming for:
-- cozy, accessible, low-friction daily journaling
-- voice as the flagship input path
-- manual logging as a first-class fallback
-- a second-brain feel without turning into an overwhelming knowledge base
-- a companion that thinks with the user instead of sounding like "therapist lite"
-
-That last point matters.
+The system is building toward:
+- Cozy, accessible, low-friction daily journaling
+- Voice as the flagship input path
+- Manual logging as first-class fallback
+- A second-brain feel — not an overwhelming knowledge base
+- A companion that thinks *with* the user, not at them
 
 The app is intentionally moving away from:
-- canned reassurance
-- generic safety boilerplate
-- reflexive redirection to outside services for normal emotional reflection
+- Canned reassurance
+- Generic safety boilerplate
+- Reflexive redirection for normal emotional reflection
 
-The intended default behavior is collaborative, grounded, and useful.
+Default behavior: collaborative, grounded, useful.
+
+---
 
 ## Current Architecture
 
 ### Frontend surfaces
-- `/`
-  - cozy daily home
-  - voice capture
-  - manual quick log
-  - today's sessions
-  - open tasks
-  - top memory snapshot
-- `/sessions`
-  - archive of saved session entries
-- `/sessions/[id]`
-  - single journal-entry view
-  - artifact editing
-  - task editing
-  - transcript as secondary detail
-- `/profile`
-  - rolling summary + durable memories
-  - memory edit/pin/archive
+- `/` — cozy daily home: voice capture, manual quick log, today's sessions, open tasks, top memory snapshot
+- `/sessions` — archive of saved session entries
+- `/sessions/[id]` — single journal-entry view with artifact/task editing and transcript
+- `/profile` — rolling summary + durable memories with edit/pin/archive
 
 ### Server responsibilities
-- `/api/realtime`
-  - exchanges SDP with OpenAI Realtime
-  - accepts optional companion instructions
-- `/api/sessions/finalize`
-  - saves voice sessions
-  - generates artifact + summary + memory
-- `/api/sessions/manual`
-  - converts a manual text log into the same finalize pipeline
-- `/api/sessions`
-  - session list API
-- `/api/sessions/[id]`
-  - session detail API
-  - session artifact patch API
-- `/api/tasks/[id]`
-  - task patch API
-- `/api/profile`
-  - profile/memory read API
-- `/api/profile/memories/[id]`
-  - memory patch API
+- `/api/realtime` — exchanges SDP with OpenAI Realtime, accepts companion instructions
+- `/api/sessions/finalize` — saves voice sessions, generates artifact + summary + memory
+- `/api/sessions/manual` — converts a manual text log into the same finalize pipeline
+- `/api/sessions` — session list API
+- `/api/sessions/[id]` — session detail + artifact patch API
+- `/api/tasks/[id]` — task patch API
+- `/api/profile` — profile/memory read API
+- `/api/profile/memories/[id]` — memory patch API
 
 ### Persistence
-Prisma + SQLite are the current storage layer.
+Prisma + SQLite.
 
-Main concepts:
+Models:
 - `Session`
 - `SessionTurn`
-- `SessionSummary`
+- `SessionSummary` — now includes `patternSummary`
 - `Task`
-- `ProfileMemory`
+- `ProfileMemory` — now includes `weight`, `seenCount`
 - `ProfileSnapshot`
 
-Design choice:
-- recent raw transcripts are short-term memory
-- summaries + memory items are long-term memory
+Design:
+- Recent raw transcripts = short-term memory (pruned to latest 5)
+- Summaries + memory items = long-term memory
+- Weight + seenCount = signal strength tracking over time
 
-This keeps the system inspectable and avoids "store every transcript forever" as the main memory strategy.
+---
 
 ## Important Files
 
@@ -140,232 +127,215 @@ This keeps the system inspectable and avoids "store every transcript forever" as
 - `app/realtime/useRealtime.ts`
 - `app/realtime/types.ts`
 
-### Summary / memory / persistence logic
-- `lib/brain.ts`
+### Memory + brain layer (fully separated)
+- `lib/memory.ts` — upsert/decay/read for ProfileMemory
+- `lib/extractor.ts` — atomic signal extractor (gpt-5.4-nano)
+- `lib/brain.ts` — builds 3-layer system instructions
+- `lib/state.ts` — emotion + intent detection (rule-based v1)
+- `lib/turn.ts` — turn manager: response guidance per state + mode
+- `lib/timing.ts` — silence detection + response delay logic
+
+### Summary / persistence
 - `lib/session-summary.ts`
 - `lib/session-finalizer.ts`
 - `lib/session-types.ts`
 - `lib/prisma.ts`
 - `prisma/schema.prisma`
 
-## How The Current Voice Behavior Works
+---
 
-### Realtime transport
-The voice stack is intentionally not being re-architected right now.
+## How The Memory System Works
 
-Current approach:
-- create WebRTC peer connection in `app/realtime/client.ts`
-- send SDP offer to `/api/realtime`
-- server relays to OpenAI Realtime `/v1/realtime/calls`
-- receive assistant audio back through the peer connection
-- receive transcript events through the data channel
+### Memory layers (3 time scales)
 
-### Behavior injection
-Behavior tuning now happens above the transport layer.
+```
+Atomic memory     → fast-changing    (weight evolves per session)
+Pattern summary   → medium stability (one sentence, per session)
+Profile           → slow-changing    (rolling paragraph, cumulative)
+```
 
-`lib/brain.ts` builds instructions from:
-- selected mode
-- profile summary
-- top memories
-- safety style
+### Upsert + weight evolution
+- New memory: `weight=1.0`, `seenCount=1`
+- Same signal again: `weight += 0.5` (cap at 5.0), `seenCount++`
+- Pinned memories: recency updated, weight preserved
 
-Those instructions are passed:
-- during session initialization
-- during live updates through `session.update`
+### Decay
+- Runs non-blocking after every session finalize
+- `newWeight = weight * 0.85 ^ weeksInactive` (grace: 1 week)
+- Below 0.15 → deactivated (soft delete, not hard delete)
 
-This is the correct seam for product-level tuning.
-The voice transport itself is not the current bottleneck.
+### Brain injection
+- `getMemoriesForBrain(5)` — sorted: pinned > weight > recency
+- Injected as "Recent context" in system instructions
+- Profile summary = stable identity layer
+- Pattern summary = last session arc (bridge between atomic + profile)
+
+### Signal extraction
+- `lib/extractor.ts` extracts one normalized signal per turn
+- Uses: `gpt-5.4-nano`
+- Output: stable third-person strings → `"tends to feel drained after long work sessions"`
+- Exact-match dedup works reliably because the LLM is prompted for consistency
+
+---
 
 ## How The Session Artifact Pipeline Works
 
 When a session ends:
-1. the client sends ordered turns to `/api/sessions/finalize`
-2. the server saves the raw session + turns
-3. the server calls the summary model for structured JSON output
-4. the server saves:
-   - title
-   - summary
-   - mood
-   - themes
-   - rapid-log bullets
-   - action items
-   - updated profile summary
-   - memory item upserts
-5. the server prunes raw transcript turns for sessions older than the latest 5
+1. Client sends ordered turns to `/api/sessions/finalize`
+2. Server saves raw session + turns
+3. Summary model generates structured JSON:
+   - title (vivid, session-specific)
+   - sessionSummary (warm, first-person)
+   - keyThemes (1–4)
+   - rapidLogBullets (bullet-journal style, 1–5)
+   - actionItems (concrete only, max 3)
+   - mood (specific, 1–3 words)
+   - **patternSummary** (one-sentence arc — new)
+   - profileSummary (rolling paragraph — updated)
+   - memories (normalized, max 5 — new cap)
+4. Saves summary + tasks to DB
+5. Runs `upsertMemories()` with weight evolution
+6. Runs `decayMemories()` non-blocking
+7. Prunes raw transcripts older than latest 5
 
 If summary generation fails:
-- the raw session is still saved
-- session status becomes `SUMMARY_FAILED`
-- processing error is stored
+- Raw session still saved
+- Status → `SUMMARY_FAILED`
+- Processing error stored
+- Failure path intentional and preserved
 
-That failure path is intentional and should be preserved.
+---
 
 ## Current Model Split
 
-There are three model roles right now:
+| Role | Model |
+|---|---|
+| Realtime voice conversation | `gpt-realtime-mini` |
+| Signal extraction | `gpt-5.4-nano` |
+| Post-session summary + memory | `OPENAI_SUMMARY_MODEL` (default: `gpt-5.4-nano`) |
 
-- Realtime voice conversation:
-  - `gpt-realtime-mini`
-- Input transcription:
-  - `gpt-4o-mini-transcribe`
-- Post-session structured summary / memory extraction:
-  - `OPENAI_SUMMARY_MODEL`
-  - current example default in `.env.example` is `gpt-5.4-nano`
-
-The split is deliberate:
-- fast voice model for live interaction
-- separate text model for structured artifact generation
+---
 
 ## Environment
 
-Current expected env vars:
+Expected env vars:
 - `OPENAI_API_KEY`
 - `DATABASE_URL`
 - `OPENAI_SUMMARY_MODEL`
 
-See `.env.example` for the shape.
-Do not commit real secret values.
+See `.env.example`.
+
+---
 
 ## How To Run Locally
-
-Install dependencies if needed, then use:
 
 ```bash
 npm run dev
 ```
 
 Useful DB commands:
-
 ```bash
 npx prisma db push
 npx prisma generate
 ```
 
-Useful verification commands:
-
+Verification:
 ```bash
 npm run lint
 npm run build
 ```
 
+---
+
 ## Validation Status
 
-This phase has already been validated locally with:
-- `npx prisma db push`
-- `npx prisma generate`
-- `npm run lint`
-- `npm run build`
+Validated locally after this phase:
+- `npx prisma db push` ✓
+- `npx prisma generate` ✓
+- `npm run lint` ✓
+- `npm run build` ✓
 
-Build currently succeeds.
+Build succeeds. All 13 routes compile.
+
+---
 
 ## Known Issues / Rough Edges
 
 ### 1. Turbopack workspace-root warning
-`npm run build` shows a non-blocking warning about multiple lockfiles and inferred workspace root.
-
-It does not break the build, but it should be cleaned up later by either:
-- removing the extra lockfile, or
-- setting `turbopack.root` in Next config
+`npm run build` shows a non-blocking warning about multiple lockfiles and inferred workspace root. Does not break the build.
 
 ### 2. README is outdated
-`README.md` is still the default create-next-app file and does not describe the actual product.
+`README.md` is still the default create-next-app file.
 
-### 3. Behavior system is still prompt-led, not stateful
-The current malleability work is real, but still lightweight.
+### 3. Extractor not wired to live session yet
+`lib/extractor.ts` exists and works, but is not yet called mid-session. Currently, signal extraction only happens at session end (inside the summary pipeline implicitly via the LLM).
 
-What exists:
-- mode switching
-- instruction builder
-- live `session.update`
-- anti-therapist-lite behavioral rules
+Next step: wire `extractSignalsFromTurns()` to run on user turns during a live session, then call `upsertMemories()` immediately — so memory evolves *during* the conversation, not just after.
 
-What does not exist yet as dedicated modules from the original spec:
-- `state.ts`
-- `turn.ts`
-- `timing.ts`
-- explicit interruption/silence strategy modules
-- rule-backed safety/state classifier
-
-Right now the behavior layer is mostly in `lib/brain.ts` plus prompt wording.
-That is enough for product tuning, but not the final architecture.
-
-### 4. Summary quality still needs tuning
-The app now creates better journal artifacts than before, but tuning is still needed for:
-- title quality
-- bullet-journal voice
-- action-item precision
-- memory extraction selectivity
-- reducing any remaining therapy-ish phrasing
+### 4. `state.ts` / `turn.ts` / `timing.ts` not wired to the realtime client yet
+These modules exist with the right interfaces, but the realtime `client.ts` and `useRealtime.ts` don't call them yet. They are stubs ready to be connected.
 
 ### 5. No auth / multi-user support
-The app is intentionally single-user right now.
+Intentionally single-user.
+
+---
 
 ## Mapping Against `reference.txt`
 
-### Already aligned
-- realtime session lifecycle exists
-- `session.update` support exists
-- memory layer exists
-- mode system exists
-- saved artifacts exist
-- storage exists
+### Fully aligned
+- Realtime session lifecycle ✓
+- `session.update` support ✓
+- Memory layer ✓ (now with weight + decay)
+- Mode system ✓
+- Saved artifacts ✓
+- Storage ✓
+- `brain.ts` ✓ (3-layer instruction model)
+- `memory.ts` ✓ (separate module)
+- `extractor.ts` ✓ (separate module, stub-wired)
+- `state.ts` ✓
+- `turn.ts` ✓
+- `timing.ts` ✓
 
-### Partially aligned
-- `brain.ts`
-  - exists, but currently focused on instruction building
-- memory extraction
-  - exists, but lives inside the summary pipeline rather than separate extractor modules
+### Not yet wired
+- `handlers.ts` — event handler split from `client.ts` (still inline)
+- Live mid-session extraction — extractor exists but not called during conversation
+- `state.ts` / `turn.ts` / `timing.ts` — not yet connected to realtime client
 
-### Not yet aligned as separate modules
-The spec suggests eventually splitting into:
-- `memory.ts`
-- `extractor.ts`
-- `state.ts`
-- `turn.ts`
-- `timing.ts`
-- `handlers.ts`
-
-We have the behavior pieces conceptually, but not fully separated in code yet.
-That is likely the next architectural cleanup once product tuning becomes more advanced.
+---
 
 ## Recommended Next Steps
 
-### Highest-value next step
-Tune the companion behavior and artifact quality rather than rewriting the voice stack.
+### Highest value right now
 
-The voice layer is already the strongest part of the product.
-The biggest opportunities now are:
-- make the companion feel more collaborative and less cautious-by-default
-- improve journal artifact voice so entries feel genuinely cozy and worth revisiting
-- tighten memory extraction so it feels trustworthy
+**1. Wire the realtime client to the behavior layer**
 
-### Suggested order
-1. behavior tuning pass
-   - tune `lib/brain.ts`
-   - reduce therapist-lite tendencies
-   - refine mode distinctions
-2. artifact quality pass
-   - improve session titles
-   - improve rapid-log bullets
-   - improve task extraction quality
-3. architecture cleanup pass
-   - split state / turn / timing logic into dedicated modules from the spec
-4. UI polish pass
-   - make the Today Hub and session detail views feel even more like a premium journal product
-5. README / docs cleanup
-   - replace the default README
+Connect `state.ts`, `turn.ts`, `timing.ts` into `app/realtime/client.ts` and `useRealtime.ts` so the behavior layer actually influences live conversations. This is the biggest gap between what exists on paper and what runs at runtime.
+
+**2. Wire live memory extraction**
+
+Call `extractSignalsFromTurns()` at end of session (or every N turns) and run `upsertMemories()` immediately. This closes the loop: memory evolves during conversation, not just after.
+
+**3. Split `handlers.ts` from `client.ts`**
+
+Extract the event listener logic from `app/realtime/client.ts` into `app/realtime/handlers.ts` per the reference spec. Small refactor, high architectural clarity.
+
+**4. UI polish pass**
+
+The Today Hub and session detail views are functional. Making them feel more premium (animations, memory weight visualization, pattern summary display) would significantly improve the product feel.
+
+**5. README cleanup**
+
+Replace the default README with a real product description.
+
+---
 
 ## If You Are Picking This Up Next
 
 Start here:
-- `app/_components/today-hub.tsx`
-- `lib/brain.ts`
-- `lib/session-summary.ts`
-- `lib/session-finalizer.ts`
-- `prisma/schema.prisma`
+- `lib/memory.ts` — understand the weight system
+- `lib/brain.ts` — see how the 3-layer instructions are built
+- `app/realtime/client.ts` — this is where behavior layer wiring goes next
+- `app/_components/today-hub.tsx` — the main product surface
+- `prisma/schema.prisma` — the full data model
 
-That set gives you the product surface, live behavior seam, summary generation, persistence, and data model.
-
-## Current Working Tree Note
-
-As of this handoff, the cozy hub + malleable companion phase has been implemented locally and validated with lint/build. If you are reading this before a commit is made, expect a dirty working tree containing those changes.
+The memory architecture is solid. The next phase is connecting it to the live conversation loop.
