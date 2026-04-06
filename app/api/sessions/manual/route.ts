@@ -1,8 +1,14 @@
 import { finalizeSession } from "@/lib/session-finalizer"
 import type { CompanionMode } from "@/lib/session-types"
 import { isCompanionMode } from "@/lib/session-types"
+import { auth } from "@/lib/auth"
 
 export async function POST(req: Request) {
+  const sessionAuth = await auth()
+  if (!sessionAuth?.user?.id) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
   try {
     const body = (await req.json()) as {
       text?: unknown
@@ -16,20 +22,23 @@ export async function POST(req: Request) {
     const mode: CompanionMode = isCompanionMode(body.mode) ? body.mode : "think_with_me"
     const now = new Date().toISOString()
 
-    const result = await finalizeSession({
-      startedAt: now,
-      endedAt: now,
-      inputType: "manual",
-      mode,
-      turns: [
-        {
-          id: `manual-${Date.now()}`,
-          role: "user",
-          text: body.text.trim(),
-          status: "final",
-        },
-      ],
-    })
+    const result = await finalizeSession(
+      {
+        startedAt: now,
+        endedAt: now,
+        inputType: "manual",
+        mode,
+        turns: [
+          {
+            id: `manual-${Date.now()}`,
+            role: "user",
+            text: body.text.trim(),
+            status: "final",
+          },
+        ],
+      },
+      sessionAuth.user.id,
+    )
 
     return Response.json(result)
   } catch (error) {

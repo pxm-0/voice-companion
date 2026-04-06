@@ -1,8 +1,13 @@
+import { redirect } from "next/navigation"
 import { MemoryList } from "@/app/_components/memory-list"
+import { auth } from "@/lib/auth"
 import { getProfileState } from "@/lib/session-finalizer"
 
 export default async function ProfilePage() {
-  const profile = await getProfileState()
+  const session = await auth()
+  if (!session?.user?.id) redirect("/login")
+
+  const profile = await getProfileState(session.user.id)
 
   return (
     <main className="min-h-full bg-[linear-gradient(180deg,#f5ede2_0%,#efe4d6_45%,#e8ddcf_100%)] px-4 py-8 text-[#2f241d] sm:px-6 lg:px-8">

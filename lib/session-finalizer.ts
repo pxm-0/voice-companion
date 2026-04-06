@@ -266,9 +266,10 @@ function getTodayRange(now = new Date()) {
   return { start, end }
 }
 
-async function pruneOldTranscripts() {
-  const sessionsToPrune = await prisma.session.findMany({
+async function pruneOldTranscripts(userId: string) {
+  const sessionsToPrune = await prisma.journalSession.findMany({
     where: {
+      userId,
       transcriptRetained: true,
     },
     orderBy: [{ endedAt: "desc" }, { createdAt: "desc" }],
@@ -292,8 +293,9 @@ async function pruneOldTranscripts() {
         },
       },
     }),
-    prisma.session.updateMany({
+    prisma.journalSession.updateMany({
       where: {
+        userId,
         id: {
           in: sessionIds,
         },
@@ -372,15 +374,16 @@ function validateFinalizeRequest(body: unknown): FinalizeSessionRequest {
   }
 }
 
-async function loadProfileStateForMutation() {
+async function loadProfileStateForMutation(userId: string) {
   const [snapshot, memories] = await Promise.all([
     prisma.profileSnapshot.findUnique({
       where: {
-        id: "singleton",
+        userId,
       },
     }),
     prisma.profileMemory.findMany({
       where: {
+        userId,
         active: true,
       },
       orderBy: [{ pinned: "desc" }, { weight: "desc" }, { lastSeenAt: "desc" }],
@@ -402,7 +405,25 @@ async function loadProfileStateForMutation() {
   }
 }
 
-export async function finalizeSession(body: unknown): Promise<FinalizeSessionResponse> {
+export async function startSession(userId: string, mode: CompanionMode): Promise<{ sessionId: string }> {
+  const now = new Date()
+  const session = await prisma.journalSession.create({
+    data: {
+      userId,
+      startedAt: now,
+      endedAt: now,
+      entryDate: toEntryDate(now),
+      inputType: toPrismaInputType("voice"),
+      mode: toPrismaMode(mode),
+      status: SessionStatus.IN_PROGRESS,
+      turnCount: 0,
+      transcriptRetained: true,
+    },
+  })
+  return { sessionId: session.id }
+}
+
+export async function finalizeSession(body: unknown, userId: string, existingSessionId?: string): Promise<FinalizeSessionResponse> {
   const payload = validateFinalizeRequest(body)
   const startedAt = new Date(payload.startedAt)
   const endedAt = new Date(payload.endedAt)
@@ -412,31 +433,59 @@ export async function finalizeSession(body: unknown): Promise<FinalizeSessionRes
     throw new Error("At least one non-empty turn is required.")
   }
 
-  const session = await prisma.session.create({
-    data: {
-      startedAt,
-      endedAt,
-      entryDate: toEntryDate(startedAt),
-      inputType: toPrismaInputType(payload.inputType),
-      mode: toPrismaMode(payload.mode),
-      status: SessionStatus.PROCESSING,
-      turnCount: turns.length,
-      transcriptRetained: true,
-      turns: {
-        create: turns,
+  let session: { id: string }
+
+  if (existingSessionId) {
+    // Update the pre-created IN_PROGRESS session
+    const updatedSession = await prisma.journalSession.update({
+      where: { id: existingSessionId, userId },
+      data: {
+        startedAt,
+        endedAt,
+        entryDate: toEntryDate(startedAt),
+        inputType: toPrismaInputType(payload.inputType),
+        mode: toPrismaMode(payload.mode),
+        status: SessionStatus.PROCESSING,
+        turnCount: turns.length,
+        transcriptRetained: true,
       },
-    },
-  })
+    })
+    // Create turns separately — update doesn't support nested create on relations
+    if (turns.length > 0) {
+      await prisma.sessionTurn.createMany({
+        data: turns.map((t) => ({ ...t, sessionId: existingSessionId })),
+      })
+    }
+    session = updatedSession
+  } else {
+    session = await prisma.journalSession.create({
+      data: {
+        userId,
+        startedAt,
+        endedAt,
+        entryDate: toEntryDate(startedAt),
+        inputType: toPrismaInputType(payload.inputType),
+        mode: toPrismaMode(payload.mode),
+        status: SessionStatus.PROCESSING,
+        turnCount: turns.length,
+        transcriptRetained: true,
+        turns: {
+          create: turns,
+        },
+      },
+    })
+  }
 
   try {
     const [existingProfile, existingMemories] = await Promise.all([
       prisma.profileSnapshot.findUnique({
         where: {
-          id: "singleton",
+          userId,
         },
       }),
       prisma.profileMemory.findMany({
         where: {
+          userId,
           active: true,
         },
         orderBy: [{ pinned: "desc" }, { lastSeenAt: "desc" }],
@@ -485,18 +534,18 @@ export async function finalizeSession(body: unknown): Promise<FinalizeSessionRes
 
       await tx.profileSnapshot.upsert({
         where: {
-          id: "singleton",
+          userId,
         },
         update: {
           summary: generated.profileSummary,
         },
         create: {
-          id: "singleton",
+          userId,
           summary: generated.profileSummary,
         },
       })
 
-      await tx.session.update({
+      await tx.journalSession.update({
         where: {
           id: session.id,
         },
@@ -509,13 +558,13 @@ export async function finalizeSession(body: unknown): Promise<FinalizeSessionRes
 
     // Upsert memories with weight evolution (outside transaction — uses its own tx internally)
     if (generated.memories.length > 0) {
-      await upsertMemories(session.id, endedAt, generated.memories)
+      await upsertMemories(userId, session.id, endedAt, generated.memories)
     }
 
     // Decay stale memories — non-blocking, failure is acceptable
-    decayMemories().catch(() => {})
+    decayMemories(userId).catch(() => {})
 
-    await pruneOldTranscripts()
+    await pruneOldTranscripts(userId)
 
     const [tasks, profile] = await Promise.all([
       prisma.task.findMany({
@@ -526,7 +575,7 @@ export async function finalizeSession(body: unknown): Promise<FinalizeSessionRes
           orderIndex: "asc",
         },
       }),
-      loadProfileStateForMutation(),
+      loadProfileStateForMutation(userId),
     ])
 
     return {
@@ -546,7 +595,7 @@ export async function finalizeSession(body: unknown): Promise<FinalizeSessionRes
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown summary generation error."
 
-    await prisma.session.update({
+    await prisma.journalSession.update({
       where: {
         id: session.id,
       },
@@ -556,20 +605,21 @@ export async function finalizeSession(body: unknown): Promise<FinalizeSessionRes
       },
     })
 
-    await pruneOldTranscripts()
+    await pruneOldTranscripts(userId)
 
     return {
       sessionId: session.id,
       status: "summary_failed",
       artifact: null,
       tasks: [],
-      profile: await loadProfileStateForMutation(),
+      profile: await loadProfileStateForMutation(userId),
     }
   }
 }
 
-export async function getSessionList() {
-  const sessions = await prisma.session.findMany({
+export async function getSessionList(userId: string) {
+  const sessions = await prisma.journalSession.findMany({
+    where: { userId },
     orderBy: [{ endedAt: "desc" }, { createdAt: "desc" }],
     include: {
       summary: true,
@@ -584,10 +634,11 @@ export async function getSessionList() {
   return sessions.map((session) => serializeSessionCard(session))
 }
 
-export async function getSessionById(id: string) {
-  const session = await prisma.session.findUnique({
+export async function getSessionById(id: string, userId: string) {
+  const session = await prisma.journalSession.findFirst({
     where: {
       id,
+      userId,
     },
     include: {
       summary: true,
@@ -611,15 +662,16 @@ export async function getSessionById(id: string) {
   return serializeSessionDetail(session)
 }
 
-export async function getProfileState() {
+export async function getProfileState(userId: string) {
   const [snapshot, memories] = await Promise.all([
     prisma.profileSnapshot.findUnique({
       where: {
-        id: "singleton",
+        userId,
       },
     }),
     prisma.profileMemory.findMany({
       where: {
+        userId,
         active: true,
       },
       orderBy: [{ pinned: "desc" }, { lastSeenAt: "desc" }, { content: "asc" }],
@@ -636,12 +688,13 @@ export async function getProfileState() {
   }
 }
 
-export async function getTodayHubData(): Promise<TodayHubData> {
+export async function getTodayHubData(userId: string): Promise<TodayHubData> {
   const { start, end } = getTodayRange()
 
   const [sessions, openTasks, profile] = await Promise.all([
-    prisma.session.findMany({
+    prisma.journalSession.findMany({
       where: {
+        userId,
         entryDate: {
           gte: start,
           lt: end,
@@ -660,6 +713,9 @@ export async function getTodayHubData(): Promise<TodayHubData> {
     prisma.task.findMany({
       where: {
         completed: false,
+        session: {
+          userId,
+        },
       },
       orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
       include: {
@@ -671,7 +727,7 @@ export async function getTodayHubData(): Promise<TodayHubData> {
       },
       take: 8,
     }),
-    getProfileState(),
+    getProfileState(userId),
   ])
 
   return {
@@ -687,15 +743,17 @@ export async function getTodayHubData(): Promise<TodayHubData> {
 
 export async function updateSessionArtifact(
   sessionId: string,
+  userId: string,
   input: {
     title?: string
     summary?: string
     rapidLogBullets?: string[]
   },
 ) {
-  const session = await prisma.session.findUnique({
+  const session = await prisma.journalSession.findFirst({
     where: {
       id: sessionId,
+      userId,
     },
     include: {
       summary: true,
@@ -741,11 +799,12 @@ export async function updateSessionArtifact(
     data,
   })
 
-  return getSessionById(sessionId)
+  return getSessionById(sessionId, userId)
 }
 
 export async function updateTask(
   taskId: string,
+  userId: string,
   input: {
     content?: string
     completed?: boolean
@@ -768,7 +827,20 @@ export async function updateTask(
     data.completed = input.completed
   }
 
-  const task = await prisma.task.update({
+  const task = await prisma.task.findFirst({
+    where: {
+      id: taskId,
+      session: {
+        userId,
+      },
+    },
+  })
+
+  if (!task) {
+    throw new Error("Task not found or forbidden.")
+  }
+
+  const updatedTask = await prisma.task.update({
     where: {
       id: taskId,
     },
@@ -782,11 +854,12 @@ export async function updateTask(
     },
   })
 
-  return serializeTask(task)
+  return serializeTask(updatedTask)
 }
 
 export async function updateProfileMemory(
   memoryId: string,
+  userId: string,
   input: {
     content?: string
     pinned?: boolean
@@ -815,22 +888,33 @@ export async function updateProfileMemory(
     data.active = input.active
   }
 
-  const memory = await prisma.profileMemory.update({
+  const memory = await prisma.profileMemory.findFirst({
+    where: {
+      id: memoryId,
+      userId,
+    },
+  })
+
+  if (!memory) {
+    throw new Error("Memory not found or forbidden.")
+  }
+
+  const updatedMemory = await prisma.profileMemory.update({
     where: {
       id: memoryId,
     },
     data,
-    select: {
-      id: true,
-      kind: true,
-      content: true,
-      lastSeenAt: true,
-      pinned: true,
-      active: true,
-    },
   })
 
-  return serializeProfileMemories([memory])[0]
+  return {
+    id: updatedMemory.id,
+    kind: updatedMemory.kind,
+    content: updatedMemory.content,
+    lastSeenAt: updatedMemory.lastSeenAt.toISOString(),
+    pinned: updatedMemory.pinned,
+    active: updatedMemory.active,
+    weight: updatedMemory.weight,
+  }
 }
 
 export function getSummaryPreview(artifact: SessionArtifact | null) {

@@ -59,14 +59,33 @@ The system is building toward:
 - Voice as the flagship input path
 - Manual logging as first-class fallback
 - A second-brain feel — not an overwhelming knowledge base
-- A companion that thinks *with* the user, not at them
+- A companion that thinks *with*
 
-The app is intentionally moving away from:
-- Canned reassurance
-- Generic safety boilerplate
-- Reflexive redirection for normal emotional reflection
+## Current Status: Multi-Tenant Architecture Migration
 
-Default behavior: collaborative, grounded, useful.
+We are currently transitioning the Companion Journal from a local, single-user system into a deployment-ready, multi-tenant environment using NextAuth and Prisma.
+
+### What is Completed:
+1. **Schema & Database:**
+   - Modified `schema.prisma` to add NextAuth tables (`User`, `Account`, `Session`, `VerificationToken`).
+   - Renamed our domain `Session` to `JournalSession` to prevent collision with NextAuth's `Session`.
+   - Added `userId` fields to `JournalSession`, `ProfileSnapshot`, and `ProfileMemory` to scope all data.
+   - Performed `prisma db push --force-reset` to sync the local development SQLite database.
+2. **Auth Integration:**
+   - Created `lib/auth.config.ts`, `lib/auth.ts`, and `middleware.ts` to block non-authenticated access.
+   - Built a sleek login UI component at `app/login/page.tsx` featuring Google/GitHub integrations.
+   - Stored fake secrets into `.env` to enable NextAuth beta to function locally without crashing.
+3. **Backend Scoping (In Progress):**
+   - Refactored `lib/memory.ts`, `lib/session-finalizer.ts`, and `lib/brain.ts` functions to explicitly require and enforce `userId` tenancy for read/write queries.
+   - Refactored numerous `app/api/...` endpoint handlers to pull `session.user.id` and pass it into the scoped functions.
+
+### What Remains (Next Steps):
+1. **Finish UI/API Scoping:** Pass `session.user.id` to backend getters in the remaining Server Components (`app/page.tsx`, `app/profile/page.tsx`, `app/sessions/page.tsx`, `app/sessions/[id]/page.tsx`) and the final API routes (`app/api/sessions/route.ts`, `app/api/sessions/manual/route.ts`, `app/api/tasks/[id]/route.ts`).
+2. **Real-time Pipeline:** Secure the `/api/realtime` socket connection, ensuring memory injection and websocket connections are properly scoped.
+3. **TypeScript Cleanup:** Restart Next.js TS server/cache (or ignore lingering IDE errors) once all `userId` param requirements are fixed.
+4. **Final Deployment Polish:** Verify there are no stray components assuming a single user.
+
+**IDE Note:** You may see lingering IDE errors regarding `PrismaClient` and missing `journalSession` properties. This is due to local TS caching. `npx tsc --noEmit` and `npx prisma generate` have confirmed the schema is structurally sound, and `journalSession` exists.
 
 ---
 

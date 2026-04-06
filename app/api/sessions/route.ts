@@ -1,7 +1,13 @@
 import { getSessionList, getSummaryPreview } from "@/lib/session-finalizer"
+import { auth } from "@/lib/auth"
 
 export async function GET() {
-  const sessions = await getSessionList()
+  const sessionAuth = await auth()
+  if (!sessionAuth?.user?.id) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  const sessions = await getSessionList(sessionAuth.user.id)
 
   return Response.json({
     sessions: sessions.map((session) => ({

@@ -1,11 +1,17 @@
 import { getSessionById, validateSessionArtifactPatch, updateSessionArtifact } from "@/lib/session-finalizer"
+import { auth } from "@/lib/auth"
 
 export async function GET(
   _req: Request,
   context: { params: Promise<{ id: string }> },
 ) {
+  const sessionAuth = await auth()
+  if (!sessionAuth?.user?.id) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
   const { id } = await context.params
-  const session = await getSessionById(id)
+  const session = await getSessionById(id, sessionAuth.user.id)
 
   if (!session) {
     return Response.json({ error: "Session not found." }, { status: 404 })
@@ -35,10 +41,15 @@ export async function PATCH(
   context: { params: Promise<{ id: string }> },
 ) {
   try {
+    const sessionAuth = await auth()
+    if (!sessionAuth?.user?.id) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const { id } = await context.params
     const body = await req.json()
     const changes = validateSessionArtifactPatch(body)
-    const session = await updateSessionArtifact(id, changes)
+    const session = await updateSessionArtifact(id, sessionAuth.user.id, changes)
 
     if (!session) {
       return Response.json({ error: "Session not found." }, { status: 404 })

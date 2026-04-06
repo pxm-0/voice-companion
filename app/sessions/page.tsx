@@ -1,10 +1,15 @@
 import Link from "next/link"
+import { redirect } from "next/navigation"
 import { getModeLabel } from "@/lib/brain"
+import { auth } from "@/lib/auth"
 import { formatDateTime } from "@/lib/format-date"
 import { getSessionList } from "@/lib/session-finalizer"
 
 export default async function SessionsPage() {
-  const sessions = await getSessionList()
+  const session = await auth()
+  if (!session?.user?.id) redirect("/login")
+
+  const sessions = await getSessionList(session.user.id)
 
   return (
     <main className="min-h-full bg-[linear-gradient(180deg,#f5ede2_0%,#efe4d6_45%,#e8ddcf_100%)] px-4 py-8 text-[#2f241d] sm:px-6 lg:px-8">

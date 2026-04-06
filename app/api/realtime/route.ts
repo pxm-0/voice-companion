@@ -1,6 +1,13 @@
+import { auth } from "@/lib/auth"
+
 const REALTIME_MODEL = "gpt-realtime-mini"
 
 export async function POST(req: Request) {
+  const sessionAuth = await auth()
+  if (!sessionAuth?.user?.id) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
   try {
     const { sdp, instructions } = await req.json()
 

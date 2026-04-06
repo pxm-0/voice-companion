@@ -18,6 +18,14 @@ export function setCurrentMode(mode: CompanionMode) {
   currentMode = mode
 }
 
+// ─── Session state ──────────────────────────────────────────────────────────
+
+let currentSessionId: string | null = null
+
+export function setCurrentSessionId(id: string | null) {
+  currentSessionId = id
+}
+
 // ─── Turn state ─────────────────────────────────────────────────────────────
 
 let turnCounter = 0
@@ -42,9 +50,22 @@ function checkExtractionTick(text: string) {
     const batch = [...userTurnBuffer]
     userTurnBuffer = []
     window.dispatchEvent(
-      new CustomEvent<{ turns: string[] }>("extraction:tick", { detail: { turns: batch } }),
+      new CustomEvent<{ turns: string[]; sessionId: string | null }>("extraction:tick", {
+        detail: { turns: batch, sessionId: currentSessionId },
+      }),
     )
   }
+}
+
+export function flushExtractionBuffer() {
+  if (userTurnBuffer.length === 0) return
+  const batch = [...userTurnBuffer]
+  userTurnBuffer = []
+  window.dispatchEvent(
+    new CustomEvent<{ turns: string[]; sessionId: string | null }>("extraction:tick", {
+      detail: { turns: batch, sessionId: currentSessionId },
+    }),
+  )
 }
 
 // ─── Transcript events ───────────────────────────────────────────────────────
@@ -114,6 +135,7 @@ export function resetAssistantState() {
   assistantTextBuffer = ""
   assistantHasAudioTranscript = false
   assistantTurnFinalized = false
+  currentSessionId = null
   userTurnBuffer = []
 }
 

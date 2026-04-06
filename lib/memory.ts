@@ -52,6 +52,7 @@ export type MemoryForBrain = {
  * - Pinned memories are never modified by this function
  */
 export async function upsertMemories(
+  userId: string,
   sessionId: string | null,
   seenAt: Date,
   memories: MemoryInput[],
@@ -60,7 +61,8 @@ export async function upsertMemories(
     await prisma.$transaction(async (tx) => {
       const existing = await tx.profileMemory.findUnique({
         where: {
-          kind_content: {
+          userId_kind_content: {
+            userId,
             kind: memory.kind,
             content: memory.content,
           },
@@ -94,6 +96,7 @@ export async function upsertMemories(
           data: {
             kind: memory.kind,
             content: memory.content,
+            userId,
             sourceSessionId: sessionId,
             lastSeenAt: seenAt,
             active: true,
@@ -116,7 +119,7 @@ export async function upsertMemories(
  * Decay formula: newWeight = weight * DECAY_RATE_PER_WEEK ^ weeksSinceLastSeen
  * Memories below DEACTIVATE_THRESHOLD are set active=false (soft-deleted).
  */
-export async function decayMemories(): Promise<{
+export async function decayMemories(userId: string): Promise<{
   decayed: number
   deactivated: number
 }> {
@@ -125,7 +128,7 @@ export async function decayMemories(): Promise<{
   let deactivated = 0
 
   const candidates = await prisma.profileMemory.findMany({
-    where: { active: true, pinned: false },
+    where: { userId, active: true, pinned: false },
     select: { id: true, weight: true, lastSeenAt: true },
   })
 
@@ -163,9 +166,9 @@ export async function decayMemories(): Promise<{
  * Returns the top N memories ranked by: pinned > weight > recency.
  * This is what gets injected into the companion's system instructions.
  */
-export async function getMemoriesForBrain(limit = 5): Promise<MemoryForBrain[]> {
+export async function getMemoriesForBrain(userId: string, limit = 5): Promise<MemoryForBrain[]> {
   const memories = await prisma.profileMemory.findMany({
-    where: { active: true },
+    where: { userId, active: true },
     orderBy: [
       { pinned: "desc" },
       { weight: "desc" },
@@ -187,9 +190,9 @@ export async function getMemoriesForBrain(limit = 5): Promise<MemoryForBrain[]> 
  * Returns all active memories ordered for profile page display.
  * Includes full view data (id, lastSeenAt, active).
  */
-export async function getActiveMemories() {
+export async function getActiveMemories(userId: string) {
   return prisma.profileMemory.findMany({
-    where: { active: true },
+    where: { userId, active: true },
     orderBy: [
       { pinned: "desc" },
       { weight: "desc" },

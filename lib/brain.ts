@@ -109,15 +109,18 @@ export function buildInstructions({
  * Build instructions with memory fetched directly from the DB.
  * Preferred for session initialization where you have DB access.
  */
-export async function buildInstructionsWithMemory({
-  mode,
-  profileSummary,
-  patternSummary,
-}: {
-  mode: CompanionMode
-  profileSummary: string | null
-  patternSummary?: string | null
-}): Promise<string> {
-  const memories = await getMemoriesForBrain(5)
+export async function buildInstructionsWithMemory(
+  {
+    mode,
+    profileSummary,
+    patternSummary,
+  }: {
+    mode: CompanionMode
+    profileSummary: string | null
+    patternSummary?: string | null
+  },
+  userId: string,
+): Promise<string> {
+  const memories = await getMemoriesForBrain(userId, 5)
   return buildInstructions({ mode, profileSummary, patternSummary, memories })
 }

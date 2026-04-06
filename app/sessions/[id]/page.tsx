@@ -1,6 +1,7 @@
-import { notFound } from "next/navigation"
+import { notFound, redirect } from "next/navigation"
 import { SessionArtifactEditor } from "@/app/_components/session-artifact-editor"
 import { TaskList } from "@/app/_components/task-list"
+import { auth } from "@/lib/auth"
 import { getModeLabel } from "@/lib/brain"
 import { formatDateTime } from "@/lib/format-date"
 import { getSessionById } from "@/lib/session-finalizer"
@@ -10,8 +11,11 @@ export default async function SessionDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  const authSession = await auth()
+  if (!authSession?.user?.id) redirect("/login")
+
   const { id } = await params
-  const session = await getSessionById(id)
+  const session = await getSessionById(id, authSession.user.id)
 
   if (!session) {
     notFound()

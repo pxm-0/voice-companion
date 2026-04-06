@@ -1,9 +1,16 @@
 import { finalizeSession } from "@/lib/session-finalizer"
+import { auth } from "@/lib/auth"
 
 export async function POST(req: Request) {
   try {
+    const sessionAuth = await auth()
+    if (!sessionAuth?.user?.id) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const body = await req.json()
-    const result = await finalizeSession(body)
+    const existingSessionId = typeof body?.sessionId === "string" ? body.sessionId : undefined
+    const result = await finalizeSession(body, sessionAuth.user.id, existingSessionId)
 
     return Response.json(result)
   } catch (error) {

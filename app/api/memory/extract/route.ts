@@ -3,6 +3,7 @@ import { ProfileMemoryKind } from "@prisma/client"
 import { extractSignalsFromTurns } from "@/lib/extractor"
 import { upsertMemories } from "@/lib/memory"
 import type { SignalType } from "@/lib/extractor"
+import { auth } from "@/lib/auth"
 
 const SIGNAL_KIND: Record<SignalType, ProfileMemoryKind> = {
   emotion: ProfileMemoryKind.EMOTION,
@@ -12,7 +13,12 @@ const SIGNAL_KIND: Record<SignalType, ProfileMemoryKind> = {
 
 export async function POST(req: Request) {
   try {
-    const body = (await req.json()) as { turns?: unknown }
+    const session = await auth()
+    if (!session?.user?.id) {
+      return NextResponse.json({ extracted: 0, error: "Unauthorized" }, { status: 401 })
+    }
+
+    const body = (await req.json()) as { turns?: unknown; sessionId?: unknown }
 
     if (!Array.isArray(body.turns) || body.turns.length === 0) {
       return NextResponse.json({ extracted: 0 })
@@ -37,8 +43,8 @@ export async function POST(req: Request) {
       content: signal.value,
     }))
 
-    // No sessionId for live extraction — sourceSessionId stays null
-    await upsertMemories(null, new Date(), memories)
+    const sessionId = typeof body.sessionId === "string" ? body.sessionId : null
+    await upsertMemories(session.user.id, sessionId, new Date(), memories)
 
     return NextResponse.json({ extracted: signals.length })
   } catch (error) {
