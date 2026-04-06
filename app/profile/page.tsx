@@ -17,8 +17,8 @@ export default async function ProfilePage() {
 
           <div className="mt-6 rounded-[28px] border border-[#dfd2bf] bg-[#fff8ef] p-5">
             <p className="text-[11px] uppercase tracking-[0.28em] text-[#9f7c63]">Rolling Summary</p>
-            <p className="mt-3 text-base leading-8 text-[#3b2f25]">
-              {profile.snapshot?.summary ?? "No rolling profile summary has been generated yet."}
+            <p className="mt-3 max-w-prose text-base leading-8 text-[#3b2f25]">
+              {profile.snapshot?.summary || "No rolling profile summary has been generated yet."}
             </p>
           </div>
         </section>

@@ -51,10 +51,10 @@ export default async function SessionsPage() {
                     </div>
 
                     <h2 className="mt-4 font-[family-name:Georgia,serif] text-3xl text-[#31251d]">
-                      {session.artifact?.title ?? "Untitled session"}
+                      {session.artifact?.title || `Entry from ${formatDateTime(session.endedAt)}`}
                     </h2>
-                    <p className="mt-3 text-sm leading-7 text-[#695646]">
-                      {session.artifact?.summary ?? "This entry was saved, but the artifact still needs processing."}
+                    <p className="mt-3 max-w-prose text-sm leading-7 text-[#695646]">
+                      {session.artifact?.summary || "This entry was saved, but the artifact still needs processing."}
                     </p>
 
                     {session.artifact?.rapidLogBullets.length ? (

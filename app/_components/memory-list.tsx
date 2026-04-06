@@ -8,6 +8,12 @@ type MemoryListProps = {
   memories: ProfileMemoryView[]
 }
 
+function memoryWeightOpacity(weight?: number): number {
+  if (weight === undefined) return 0.75
+  // 1.0 → 0.60 opacity, 5.0 → 1.0 opacity
+  return Math.min(1, Math.max(0.45, 0.5 + weight * 0.1))
+}
+
 export function MemoryList({ memories }: MemoryListProps) {
   const router = useRouter()
   const [drafts, setDrafts] = useState<Record<string, string>>({})
@@ -63,7 +69,8 @@ export function MemoryList({ memories }: MemoryListProps) {
         return (
           <article
             key={memory.id}
-            className="rounded-[24px] border border-[#dfd2bf] bg-[#fffaf2] p-5 shadow-[0_8px_24px_rgba(111,81,56,0.06)]"
+            style={{ opacity: memoryWeightOpacity(memory.weight) }}
+            className="rounded-[24px] border border-[#dfd2bf] bg-[#fffaf2] p-5 shadow-[0_8px_24px_rgba(111,81,56,0.06)] transition-opacity hover:!opacity-100"
           >
             <div className="flex items-center justify-between gap-3">
               <span className="rounded-full border border-[#d7b79a] bg-[#f9efe2] px-3 py-1 text-xs text-[#7c5b45]">
@@ -103,7 +110,7 @@ export function MemoryList({ memories }: MemoryListProps) {
                 }))
               }
               rows={4}
-              className="mt-4 w-full resize-none rounded-2xl border border-[#eadfce] bg-[#fffcf7] px-4 py-3 text-sm leading-7 text-[#3b2f25] outline-none focus:border-[#d2a17f]"
+              className="mt-4 w-full resize-none rounded-2xl border border-transparent bg-transparent px-4 py-3 text-sm leading-7 text-[#3b2f25] transition-colors outline-none hover:border-[#eadfce] hover:bg-[#fffcf7] focus:border-[#d2a17f] focus:bg-[#fff] focus:shadow-sm"
             />
 
             <div className="mt-3 flex items-center justify-between gap-3 text-xs text-[#8f7f6e]">

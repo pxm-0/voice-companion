@@ -75,7 +75,7 @@ export function SessionArtifactEditor({ sessionId, artifact }: SessionArtifactEd
           <input
             value={title}
             onChange={(event) => setTitle(event.target.value)}
-            className="mt-2 w-full rounded-2xl border border-[#e2d4c3] bg-[#fffdf8] px-4 py-3 text-[#2f241d] outline-none focus:border-[#d2a17f]"
+            className="mt-2 w-full rounded-2xl border border-transparent bg-[#fffcf7] px-4 py-3 text-[#2f241d] transition-colors outline-none hover:border-[#e2d4c3] hover:bg-white focus:border-[#d2a17f] focus:bg-white focus:shadow-sm"
           />
         </label>
 
@@ -85,7 +85,7 @@ export function SessionArtifactEditor({ sessionId, artifact }: SessionArtifactEd
             value={summary}
             onChange={(event) => setSummary(event.target.value)}
             rows={5}
-            className="mt-2 w-full resize-none rounded-2xl border border-[#e2d4c3] bg-[#fffdf8] px-4 py-3 text-sm leading-7 text-[#2f241d] outline-none focus:border-[#d2a17f]"
+            className="mt-2 w-full resize-none rounded-2xl border border-transparent bg-[#fffcf7] px-4 py-3 text-sm leading-7 text-[#2f241d] transition-colors outline-none hover:border-[#e2d4c3] hover:bg-white focus:border-[#d2a17f] focus:bg-white focus:shadow-sm"
           />
         </label>
 
@@ -95,7 +95,7 @@ export function SessionArtifactEditor({ sessionId, artifact }: SessionArtifactEd
             value={bullets}
             onChange={(event) => setBullets(event.target.value)}
             rows={6}
-            className="mt-2 w-full resize-none rounded-2xl border border-[#e2d4c3] bg-[#fffdf8] px-4 py-3 text-sm leading-7 text-[#2f241d] outline-none focus:border-[#d2a17f]"
+            className="mt-2 w-full resize-none rounded-2xl border border-transparent bg-[#fffcf7] px-4 py-3 text-sm leading-7 text-[#2f241d] transition-colors outline-none hover:border-[#e2d4c3] hover:bg-white focus:border-[#d2a17f] focus:bg-white focus:shadow-sm"
           />
         </label>
       </div>

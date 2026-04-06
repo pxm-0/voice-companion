@@ -25,7 +25,7 @@ export default async function SessionDetailPage({
             <div>
               <p className="text-[11px] uppercase tracking-[0.34em] text-[#9f7c63]">Session Entry</p>
               <h1 className="mt-2 font-[family-name:Georgia,serif] text-4xl text-[#31251d]">
-                {session.artifact?.title ?? "Untitled session"}
+                {session.artifact?.title || `Entry from ${formatDateTime(session.endedAt)}`}
               </h1>
               <p className="mt-3 text-sm leading-7 text-[#705d4e]">
                 {formatDateTime(session.startedAt)} to {formatDateTime(session.endedAt)}
@@ -48,9 +48,9 @@ export default async function SessionDetailPage({
           <div className="mt-6 grid gap-4 md:grid-cols-[1.1fr_0.9fr]">
             <div className="rounded-[28px] border border-[#dfd2bf] bg-[#fff8ef] p-5">
               <p className="text-[11px] uppercase tracking-[0.28em] text-[#9f7c63]">Summary</p>
-              <p className="mt-3 text-base leading-8 text-[#3b2f25]">
-                {session.artifact?.summary ?? "Summary is not available for this session yet."}
-              </p>
+              <div className="mt-3 max-w-prose text-base leading-8 text-[#3b2f25]">
+                {session.artifact?.summary || "Summary is not available for this session yet."}
+              </div>
               {session.processingError && (
                 <p className="mt-4 rounded-2xl border border-[#dfbaa6] bg-[#f7e2d7] px-4 py-3 text-sm text-[#924d42]">
                   Summary processing error: {session.processingError}
