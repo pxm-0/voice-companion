@@ -1,10 +1,10 @@
-# Companion Journal Handoff
+# Eli — Handoff
 
 Last updated: 2026-04-07
 
 ## Project Snapshot
 
-Companion Journal is a cozy voice journaling app built on OpenAI Realtime WebRTC.
+Eli is a cozy voice journaling companion built on OpenAI Realtime WebRTC.
 
 The core architecture is fully in place across four layers:
 - **Voice transport** — live WebRTC conversation with OpenAI Realtime
@@ -12,13 +12,13 @@ The core architecture is fully in place across four layers:
 - **Memory evolution** — atomic memory with weight/decay, pattern summaries, and a slow-changing profile
 - **Journal artifacts** — saved session entries with vivid titles, bullet-journal bullets, and structured action items
 
-The product direction is a cozy second-brain + journaling companion. Not a chatbot with memory. Not therapy-lite. A system that continuously evolves its understanding of the user.
+The product identity is a personal voice companion named Eli. Not a chatbot with memory. Not therapy-lite. A system that continuously evolves its understanding of the user.
 
 ---
 
 ## Current Status
 
-**Phases 1–3 are complete and pushed to main.** The system is functionally complete for a logged-in user. What remains is deployment (OAuth credentials + hosting) and one planned UX feature (voice preference selector).
+**Deployed to Vercel. Backend is broken — SQLite cannot run on Vercel serverless.** The DB must be migrated to Postgres before the deployed version works. All other systems are functionally complete.
 
 ### What Is Done
 
@@ -31,66 +31,139 @@ The product direction is a cozy second-brain + journaling companion. Not a chatb
 | Memory weight/decay system | ✓ |
 | Brain instructions (3-layer: profile + pattern + atomic) | ✓ |
 | Behavior layer (state.ts → turn.ts → session.update) | ✓ |
-| handlers.ts split from client.ts | ✓ |
 | Session pre-create (IN_PROGRESS on connect) | ✓ |
 | Session attribution (sessionId threaded through extraction) | ✓ |
 | Multi-tenant auth (NextAuth, userId scoping on all routes) | ✓ |
 | Login page (Google + GitHub OAuth) | ✓ |
 | All pages + API routes auth-gated | ✓ |
+| Rebrand to "Eli" (UI + AI identity) | ✓ |
+| Today hub redesign (greeting, orb, session overlay, mode pill) | ✓ |
 | Voice preference setting (user-selectable) | Planned |
-| Deployment | Not started |
+| **Database: Postgres migration** | **Blocking** |
+| OAuth credentials wired in Vercel env | Not done |
 
-### What Remains
+---
 
-**1. Voice preference selector** (planned, not started)
-- Add `voicePreference String @default("marin")` to User schema
-- New `PATCH /api/profile/settings` endpoint
-- `VoiceSettings` client component on profile page
-- Realtime route reads from user record instead of hardcoded `"marin"`
-- Plan file: `/Users/oreo/.claude/plans/mellow-napping-nest.md`
+## Next Steps (in order)
 
-**2. Deployment**
-- Platform: not decided (Vercel is natural fit for Next.js)
-- Needs: real `NEXTAUTH_SECRET`, Google + GitHub OAuth credentials with production redirect URIs
-- Database: SQLite is fine for 5–10 users; no Postgres migration needed
+### Step 1 — Migrate database to Postgres (BLOCKING for production)
 
-**3. Phase 4 (optional)**
-- Wire `timing.ts` `getTimingConfig()` into session.update `turn_detection` field for VAD optimization
+**Why:** Vercel serverless functions have no persistent filesystem. SQLite (`file:./dev.db`) doesn't exist on Vercel. Every API call to the DB fails on deploy.
+
+**How:**
+
+1. Provision a Postgres database. Recommended: **Neon** via Vercel Marketplace (free tier, auto-provisions `DATABASE_URL` in Vercel env).
+   - Vercel dashboard → Storage → Browse Marketplace → Neon
+   - After provisioning, `DATABASE_URL` is set in Vercel env automatically for all environments
+
+2. Change `prisma/schema.prisma` datasource provider:
+   ```diff
+   datasource db {
+   -  provider = "sqlite"
+   +  provider = "postgresql"
+      url      = env("DATABASE_URL")
+   }
+   ```
+
+3. Generate a migration from the current schema:
+   ```bash
+   npx prisma migrate dev --name init
+   ```
+   This creates `prisma/migrations/` with SQL that Vercel will apply.
+
+4. Pull the Vercel Postgres `DATABASE_URL` locally to test:
+   ```bash
+   vercel env pull .env.local
+   ```
+
+5. Run the migration against the remote Postgres DB:
+   ```bash
+   npx prisma migrate deploy
+   ```
+
+6. Redeploy:
+   ```bash
+   vercel --prod
+   ```
+
+**Prisma schema changes needed beyond provider:** None expected. The current schema uses no SQLite-specific types. All field types (`String`, `DateTime`, `Boolean`, `Int`, `Float`, enums) map cleanly to Postgres.
+
+**Local dev after migration:** Keep a local `.env` pointing to the SQLite file for fast iteration, or use Neon's branch feature to get a separate dev database. If keeping SQLite locally, the `provider` line will need to stay `"sqlite"` in the local schema or you'll need to configure a dev DATABASE_URL separately.
+
+---
+
+### Step 2 — Wire OAuth credentials in Vercel env
+
+Needed for production login to work:
+- `GOOGLE_ID` + `GOOGLE_SECRET` — Google Cloud Console → OAuth 2.0 Client
+  - Authorized redirect URI: `https://your-domain.vercel.app/api/auth/callback/google`
+- `GITHUB_ID` + `GITHUB_SECRET` — GitHub → Settings → Developer settings → OAuth Apps
+  - Callback URL: `https://your-domain.vercel.app/api/auth/callback/github`
+- `BETTER_AUTH_SECRET` — already in `.env`, confirm it's set in Vercel env
+- `NEXTAUTH_URL` — set to the production domain in Vercel env (Production only; not needed for Preview)
+
+Add via Vercel dashboard → Settings → Environment Variables, or:
+```bash
+vercel env add GOOGLE_ID
+vercel env add GOOGLE_SECRET
+# etc.
+```
+
+---
+
+### Step 3 — Voice preference selector (planned feature, not blocking)
+
+Plan file: `/Users/oreo/.claude/plans/mellow-napping-nest.md`
+
+What's needed:
+- Add `voicePreference String @default("ash")` to `User` model in `prisma/schema.prisma`
+- New `PATCH /api/profile/settings` endpoint — reads/writes `voicePreference` on `User`
+- `VoiceSettings` client component on `/profile` page — dropdown of available OpenAI Realtime voices
+- `app/api/realtime/route.ts` — read `voicePreference` from user record instead of hardcoded value
+- One migration: `npx prisma migrate dev --name add_voice_preference`
+
+---
+
+### Step 4 — Phase 4: wire timing.ts VAD tuning (optional, not blocking)
+
+`getTimingConfig()` in `lib/timing.ts` is not yet passed into the `turn_detection` field of `session.update`. The behavior layer fires correctly without it; this is a tuning optimization for silence detection thresholds.
 
 ---
 
 ## Local Development
 
-### Getting unblocked without OAuth credentials
+### Without OAuth credentials
 
-Auth is wired for production but OAuth creds aren't set up yet. To test locally:
+Auth is wired for production but OAuth creds may not be set up locally. To bypass:
 
 1. Add to `.env.local`:
    ```
    SKIP_AUTH_FOR_DEV=true
-   NEXTAUTH_SECRET=any-random-string
-   NEXTAUTH_URL=http://localhost:3000
+   BETTER_AUTH_SECRET=any-random-string
    ```
 
 2. Seed the mock dev user into SQLite (required for FK constraints):
    ```bash
    npx prisma studio
    ```
-   In `User` table, add a row: `id: dev-user-001`, `email: dev@localhost`, `name: Dev User`
+   In `User` table, add: `id: dev-user-001`, `email: dev@localhost`, `name: Dev User`
 
 3. Run: `npm run dev`
 
-The mock auth bypass is in `lib/auth.ts` — gated on `SKIP_AUTH_FOR_DEV=true` so it never activates in production.
+The bypass is in `lib/auth.ts` — gated on `SKIP_AUTH_FOR_DEV=true`, never activates in production.
 
 ### Useful commands
 
 ```bash
 npm run dev
-npx prisma studio        # browse/edit DB
-npx prisma db push       # sync schema changes
-npx prisma generate      # regenerate client after schema change
-npx tsc --noEmit         # type check
-npm run build            # full build verification
+npx prisma studio                      # browse/edit DB
+npx prisma db push                     # sync schema without migration
+npx prisma migrate dev --name <name>   # create a migration
+npx prisma migrate deploy              # apply migrations to remote DB
+npx prisma generate                    # regenerate client after schema change
+npx tsc --noEmit                       # type check
+npm run build                          # full build verification
+vercel env pull .env.local             # pull Vercel env vars locally
 ```
 
 ---
@@ -98,7 +171,7 @@ npm run build            # full build verification
 ## Architecture
 
 ### Frontend surfaces
-- `/` — Today Hub: voice capture, manual quick log, today's sessions, open tasks, top memory snapshot
+- `/` — Today: greeting, voice orb, mode selector, session overlay, post-session card, today's entries, open tasks
 - `/sessions` — archive of saved journal entries
 - `/sessions/[id]` — single journal entry with artifact/task editing and transcript
 - `/profile` — rolling summary + durable memories with edit/pin/archive
@@ -118,7 +191,7 @@ npm run build            # full build verification
 - `GET|POST /api/auth/[...nextauth]` — NextAuth handler
 
 ### Persistence
-Prisma + SQLite (`prisma/dev.db`).
+Prisma + SQLite locally (`prisma/dev.db`). **Must migrate to Postgres for Vercel.**
 
 Models: `JournalSession`, `SessionTurn`, `SessionArtifact`, `Task`, `ProfileMemory`, `ProfileSnapshot`, `User`, `Account`, `Session` (NextAuth), `VerificationToken`
 
@@ -134,9 +207,9 @@ Pattern summary   → medium stability (one sentence, per session)
 Profile           → slow-changing    (rolling paragraph, cumulative)
 ```
 
-### Live extraction (new in Phase 2)
+### Live extraction
 - Every 5 user turns → `extraction:tick` event fires
-- `sessionId` is threaded from session pre-create through the extraction pipeline
+- `sessionId` threaded from session pre-create through the extraction pipeline
 - Hits `/api/memory/extract` → AI extracts normalized signals → `upsertMemories()`
 - Memory evolves *during* the conversation, not just after
 
@@ -158,7 +231,7 @@ Profile           → slow-changing    (rolling paragraph, cumulative)
 
 ---
 
-## How The Behavior Layer Works (Phase 3)
+## How The Behavior Layer Works
 
 ```
 User turn arrives
@@ -232,8 +305,8 @@ User ends session
 ### Behavior + brain layer
 - `lib/state.ts` — emotion + intent detection
 - `lib/turn.ts` — TurnGuidance per state + mode
-- `lib/timing.ts` — silence threshold + response delay
-- `lib/brain.ts` — 3-layer system instruction builder
+- `lib/timing.ts` — silence threshold + response delay (not yet wired to VAD)
+- `lib/brain.ts` — 3-layer system instruction builder (AI identifies as "Eli")
 - `lib/memory.ts` — upsert/decay/read for ProfileMemory
 - `lib/extractor.ts` — AI signal extractor
 
@@ -252,43 +325,45 @@ User ends session
 
 ## Environment Variables
 
-Required:
+### Required for production
 - `OPENAI_API_KEY`
-- `NEXTAUTH_SECRET`
-- `NEXTAUTH_URL`
-- `GOOGLE_ID` + `GOOGLE_SECRET` (for production)
-- `GITHUB_ID` + `GITHUB_SECRET` (optional, dev convenience)
+- `DATABASE_URL` — Postgres connection string (Neon recommended)
+- `BETTER_AUTH_SECRET`
+- `GOOGLE_ID` + `GOOGLE_SECRET`
+- `GITHUB_ID` + `GITHUB_SECRET`
 
-Optional:
+### Optional
 - `OPENAI_SUMMARY_MODEL` (defaults to `gpt-5.4-nano`)
-- `DATABASE_URL` (defaults to SQLite `file:./dev.db`)
 - `SKIP_AUTH_FOR_DEV=true` (local dev only, never in production)
+
+### Not needed on Vercel
+- `NEXTAUTH_URL` — Vercel infers from deployment URL automatically
 
 ---
 
 ## Validation Status
 
 Last full build: 2026-04-07
-- `npx prisma db push` ✓
-- `npx prisma generate` ✓
 - `npx tsc --noEmit` ✓ (zero errors)
 - `npm run build` ✓ (17 routes)
+- Deployed to Vercel ✓ (frontend loads)
+- Backend/DB: broken until Postgres migration
 
 ---
 
 ## Known Issues
 
-### 1. FK error for dev mock user
-Creating a voice session fails with a foreign key constraint if the dev user (`dev-user-001`) doesn't exist in the `User` table. Fix: seed via Prisma Studio (see Local Development above).
+### 1. SQLite on Vercel (BLOCKING)
+All API routes that touch the DB fail on Vercel. Fix: Postgres migration (see Next Steps Step 1).
 
-### 2. OAuth not configured locally
-Google and GitHub OAuth credentials aren't set up. Use `SKIP_AUTH_FOR_DEV=true` for local testing.
+### 2. OAuth not configured in Vercel env
+Login will fail on the deployed version until Google/GitHub credentials are added to Vercel environment variables with correct redirect URIs.
 
-### 3. Turbopack workspace-root warning
-Non-blocking build warning about multiple lockfiles. Does not affect runtime.
+### 3. FK error for dev mock user (local only)
+Creating a voice session locally fails with a foreign key constraint if the dev user (`dev-user-001`) doesn't exist in the `User` table. Fix: seed via Prisma Studio.
 
 ### 4. Phase 4 (timing.ts VAD) not wired
-`getTimingConfig()` from `lib/timing.ts` is not yet passed into session.update's `turn_detection` field. The behavior layer fires correctly; this is a tuning optimization only.
+`getTimingConfig()` from `lib/timing.ts` is not yet passed into session.update's `turn_detection` field. Behavior layer fires correctly; this is a tuning optimization only.
 
-### 5. README is outdated
-Still the default create-next-app file.
+### 5. Turbopack workspace-root warning
+Non-blocking build warning about multiple lockfiles. Does not affect runtime.
