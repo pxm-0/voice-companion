@@ -663,7 +663,7 @@ export async function getSessionById(id: string, userId: string) {
 }
 
 export async function getProfileState(userId: string) {
-  const [snapshot, memories] = await Promise.all([
+  const [snapshot, memories, user] = await Promise.all([
     prisma.profileSnapshot.findUnique({
       where: {
         userId,
@@ -676,6 +676,10 @@ export async function getProfileState(userId: string) {
       },
       orderBy: [{ pinned: "desc" }, { lastSeenAt: "desc" }, { content: "asc" }],
     }),
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: { voicePreference: true },
+    }),
   ])
 
   return {
@@ -685,6 +689,7 @@ export async function getProfileState(userId: string) {
         }
       : null,
     memories: serializeProfileMemories(memories),
+    voicePreference: user?.voicePreference ?? "marin",
   }
 }
 

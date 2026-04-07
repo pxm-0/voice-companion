@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation"
 import { MemoryList } from "@/app/_components/memory-list"
+import { VoiceSettings } from "@/app/_components/voice-settings"
 import { auth } from "@/lib/auth"
 import { getProfileState } from "@/lib/session-finalizer"
 
@@ -42,6 +43,15 @@ export default async function ProfilePage() {
 
           <div className="mt-6">
             <MemoryList memories={profile.memories} />
+          </div>
+        </section>
+
+        <section className="rounded-[32px] border border-[#dbcdb8] bg-[#fffaf2] p-6 shadow-[0_18px_50px_rgba(92,63,39,0.08)]">
+          <p className="text-[11px] uppercase tracking-[0.28em] text-[#9f7c63]">Voice</p>
+          <h2 className="mt-2 font-[family-name:Georgia,serif] text-2xl text-[#31251d]">Companion voice</h2>
+
+          <div className="mt-6 max-w-sm">
+            <VoiceSettings initialVoice={profile.voicePreference} />
           </div>
         </section>
       </div>

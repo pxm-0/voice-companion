@@ -1,6 +1,8 @@
 import { auth } from "@/lib/auth"
+import { prisma } from "@/lib/prisma"
 
 const REALTIME_MODEL = "gpt-realtime-mini"
+const DEFAULT_VOICE = "marin"
 
 export async function POST(req: Request) {
   const sessionAuth = await auth()
@@ -19,6 +21,12 @@ export async function POST(req: Request) {
       return Response.json({ error: "Server is missing OPENAI_API_KEY" }, { status: 500 })
     }
 
+    const userRecord = await prisma.user.findUnique({
+      where: { id: sessionAuth.user.id },
+      select: { voicePreference: true },
+    })
+    const voice = userRecord?.voicePreference ?? DEFAULT_VOICE
+
     const sessionConfig = {
       type: "realtime",
       model: REALTIME_MODEL,
@@ -30,7 +38,7 @@ export async function POST(req: Request) {
           },
         },
         output: {
-          voice: "marin",
+          voice,
         },
       },
     }

@@ -1,13 +1,14 @@
 # Companion Journal Handoff
 
-Last updated: 2026-04-06
+Last updated: 2026-04-07
 
 ## Project Snapshot
 
 Companion Journal is a cozy voice journaling app built on OpenAI Realtime WebRTC.
 
-The core architecture is now in place across three layers:
+The core architecture is fully in place across four layers:
 - **Voice transport** — live WebRTC conversation with OpenAI Realtime
+- **Behavior layer** — emotion/intent detection drives live session.update calls during conversation
 - **Memory evolution** — atomic memory with weight/decay, pattern summaries, and a slow-changing profile
 - **Journal artifacts** — saved session entries with vivid titles, bullet-journal bullets, and structured action items
 
@@ -15,125 +16,206 @@ The product direction is a cozy second-brain + journaling companion. Not a chatb
 
 ---
 
-## What Exists Right Now
+## Current Status
 
-### Live voice flow
-- WebRTC voice session works through `/api/realtime`
-- User transcript events appear in the UI
-- Assistant transcript streams and finalizes correctly
-- Session instructions are updated live through `session.update`
+**Phases 1–3 are complete and pushed to main.** The system is functionally complete for a logged-in user. What remains is deployment (OAuth credentials + hosting) and one planned UX feature (voice preference selector).
 
-### Journal product flow
-- `/` is a `Today Hub`
-- Users can start a voice check-in or write a manual quick log
-- Both paths feed the same save + summarize + memory pipeline
-- Saved sessions show title, summary, mood, themes, rapid-log bullets, and tasks
-- Raw transcripts are retained only for the latest 5 sessions
+### What Is Done
 
-### Memory system (newly upgraded)
-- Each session runs `upsertMemories()` — same signal seen again → weight increases
-- Unused memories decay weekly (0.85^weeks) and deactivate below threshold 0.15
-- Brain instructions are now built from **3 ranked layers**:
-  1. Profile summary (slow-changing long-term identity)
-  2. Pattern summary (last session arc — medium stability)
-  3. Top 5 weighted memories (fast-changing atomic signals)
-- Memory content is normalized to stable third-person strings for exact-match deduplication
-- `EMOTION` is now a valid memory kind alongside: `IDENTITY`, `PREFERENCE`, `GOAL`, `THEME`, `RELATIONSHIP`, `ROUTINE`
+| Feature | Status |
+|---|---|
+| Voice WebRTC session | ✓ |
+| Journal artifact pipeline (finalize, summary, tasks) | ✓ |
+| Memory extraction — live (every 5 turns) | ✓ |
+| Memory extraction — post-session | ✓ |
+| Memory weight/decay system | ✓ |
+| Brain instructions (3-layer: profile + pattern + atomic) | ✓ |
+| Behavior layer (state.ts → turn.ts → session.update) | ✓ |
+| handlers.ts split from client.ts | ✓ |
+| Session pre-create (IN_PROGRESS on connect) | ✓ |
+| Session attribution (sessionId threaded through extraction) | ✓ |
+| Multi-tenant auth (NextAuth, userId scoping on all routes) | ✓ |
+| Login page (Google + GitHub OAuth) | ✓ |
+| All pages + API routes auth-gated | ✓ |
+| Voice preference setting (user-selectable) | Planned |
+| Deployment | Not started |
 
-### Second-brain flow
-- Each saved session updates:
-  - Rolling profile summary
-  - Pattern summary (new: "This session, the user felt...")
-  - Durable memory items with weight evolution
-  - Action items/tasks
-- Memory items can be edited, pinned, or archived
-- Session artifacts can be edited after generation
-- Tasks can be edited and completed
+### What Remains
 
----
+**1. Voice preference selector** (planned, not started)
+- Add `voicePreference String @default("marin")` to User schema
+- New `PATCH /api/profile/settings` endpoint
+- `VoiceSettings` client component on profile page
+- Realtime route reads from user record instead of hardcoded `"marin"`
+- Plan file: `/Users/oreo/.claude/plans/mellow-napping-nest.md`
 
-## Product Direction
+**2. Deployment**
+- Platform: not decided (Vercel is natural fit for Next.js)
+- Needs: real `NEXTAUTH_SECRET`, Google + GitHub OAuth credentials with production redirect URIs
+- Database: SQLite is fine for 5–10 users; no Postgres migration needed
 
-The system is building toward:
-- Cozy, accessible, low-friction daily journaling
-- Voice as the flagship input path
-- Manual logging as first-class fallback
-- A second-brain feel — not an overwhelming knowledge base
-- A companion that thinks *with*
-
-## Current Status: Multi-Tenant Architecture Migration
-
-We are currently transitioning the Companion Journal from a local, single-user system into a deployment-ready, multi-tenant environment using NextAuth and Prisma.
-
-### What is Completed:
-1. **Schema & Database:**
-   - Modified `schema.prisma` to add NextAuth tables (`User`, `Account`, `Session`, `VerificationToken`).
-   - Renamed our domain `Session` to `JournalSession` to prevent collision with NextAuth's `Session`.
-   - Added `userId` fields to `JournalSession`, `ProfileSnapshot`, and `ProfileMemory` to scope all data.
-   - Performed `prisma db push --force-reset` to sync the local development SQLite database.
-2. **Auth Integration:**
-   - Created `lib/auth.config.ts`, `lib/auth.ts`, and `middleware.ts` to block non-authenticated access.
-   - Built a sleek login UI component at `app/login/page.tsx` featuring Google/GitHub integrations.
-   - Stored fake secrets into `.env` to enable NextAuth beta to function locally without crashing.
-3. **Backend Scoping (In Progress):**
-   - Refactored `lib/memory.ts`, `lib/session-finalizer.ts`, and `lib/brain.ts` functions to explicitly require and enforce `userId` tenancy for read/write queries.
-   - Refactored numerous `app/api/...` endpoint handlers to pull `session.user.id` and pass it into the scoped functions.
-
-### What Remains (Next Steps):
-1. **Finish UI/API Scoping:** Pass `session.user.id` to backend getters in the remaining Server Components (`app/page.tsx`, `app/profile/page.tsx`, `app/sessions/page.tsx`, `app/sessions/[id]/page.tsx`) and the final API routes (`app/api/sessions/route.ts`, `app/api/sessions/manual/route.ts`, `app/api/tasks/[id]/route.ts`).
-2. **Real-time Pipeline:** Secure the `/api/realtime` socket connection, ensuring memory injection and websocket connections are properly scoped.
-3. **TypeScript Cleanup:** Restart Next.js TS server/cache (or ignore lingering IDE errors) once all `userId` param requirements are fixed.
-4. **Final Deployment Polish:** Verify there are no stray components assuming a single user.
-
-**IDE Note:** You may see lingering IDE errors regarding `PrismaClient` and missing `journalSession` properties. This is due to local TS caching. `npx tsc --noEmit` and `npx prisma generate` have confirmed the schema is structurally sound, and `journalSession` exists.
+**3. Phase 4 (optional)**
+- Wire `timing.ts` `getTimingConfig()` into session.update `turn_detection` field for VAD optimization
 
 ---
 
-## Current Architecture
+## Local Development
+
+### Getting unblocked without OAuth credentials
+
+Auth is wired for production but OAuth creds aren't set up yet. To test locally:
+
+1. Add to `.env.local`:
+   ```
+   SKIP_AUTH_FOR_DEV=true
+   NEXTAUTH_SECRET=any-random-string
+   NEXTAUTH_URL=http://localhost:3000
+   ```
+
+2. Seed the mock dev user into SQLite (required for FK constraints):
+   ```bash
+   npx prisma studio
+   ```
+   In `User` table, add a row: `id: dev-user-001`, `email: dev@localhost`, `name: Dev User`
+
+3. Run: `npm run dev`
+
+The mock auth bypass is in `lib/auth.ts` — gated on `SKIP_AUTH_FOR_DEV=true` so it never activates in production.
+
+### Useful commands
+
+```bash
+npm run dev
+npx prisma studio        # browse/edit DB
+npx prisma db push       # sync schema changes
+npx prisma generate      # regenerate client after schema change
+npx tsc --noEmit         # type check
+npm run build            # full build verification
+```
+
+---
+
+## Architecture
 
 ### Frontend surfaces
-- `/` — cozy daily home: voice capture, manual quick log, today's sessions, open tasks, top memory snapshot
-- `/sessions` — archive of saved session entries
-- `/sessions/[id]` — single journal-entry view with artifact/task editing and transcript
+- `/` — Today Hub: voice capture, manual quick log, today's sessions, open tasks, top memory snapshot
+- `/sessions` — archive of saved journal entries
+- `/sessions/[id]` — single journal entry with artifact/task editing and transcript
 - `/profile` — rolling summary + durable memories with edit/pin/archive
+- `/login` — Google + GitHub OAuth sign-in
 
-### Server responsibilities
-- `/api/realtime` — exchanges SDP with OpenAI Realtime, accepts companion instructions
-- `/api/sessions/finalize` — saves voice sessions, generates artifact + summary + memory
-- `/api/sessions/manual` — converts a manual text log into the same finalize pipeline
-- `/api/sessions` — session list API
-- `/api/sessions/[id]` — session detail + artifact patch API
-- `/api/tasks/[id]` — task patch API
-- `/api/profile` — profile/memory read API
-- `/api/profile/memories/[id]` — memory patch API
+### API routes
+- `POST /api/realtime` — exchanges SDP with OpenAI Realtime, injects brain instructions
+- `POST /api/sessions/start` — pre-creates IN_PROGRESS session on voice connect
+- `POST /api/sessions/finalize` — saves voice sessions, generates artifact + memory
+- `POST /api/sessions/manual` — converts manual text log into the same finalize pipeline
+- `GET /api/sessions` — session list
+- `GET/PATCH /api/sessions/[id]` — session detail + artifact patch
+- `PATCH /api/tasks/[id]` — task completion/edit
+- `GET /api/profile` — profile/memory read
+- `PATCH /api/profile/memories/[id]` — memory pin/archive/edit
+- `POST /api/memory/extract` — live mid-session memory extraction (called every 5 turns)
+- `GET|POST /api/auth/[...nextauth]` — NextAuth handler
 
 ### Persistence
-Prisma + SQLite.
+Prisma + SQLite (`prisma/dev.db`).
 
-Models:
-- `Session`
-- `SessionTurn`
-- `SessionSummary` — now includes `patternSummary`
-- `Task`
-- `ProfileMemory` — now includes `weight`, `seenCount`
-- `ProfileSnapshot`
+Models: `JournalSession`, `SessionTurn`, `SessionArtifact`, `Task`, `ProfileMemory`, `ProfileSnapshot`, `User`, `Account`, `Session` (NextAuth), `VerificationToken`
 
-Design:
-- Recent raw transcripts = short-term memory (pruned to latest 5)
-- Summaries + memory items = long-term memory
-- Weight + seenCount = signal strength tracking over time
+---
+
+## How The Memory System Works
+
+### Three time scales
+
+```
+Atomic memory     → fast-changing    (weight evolves per session)
+Pattern summary   → medium stability (one sentence, per session)
+Profile           → slow-changing    (rolling paragraph, cumulative)
+```
+
+### Live extraction (new in Phase 2)
+- Every 5 user turns → `extraction:tick` event fires
+- `sessionId` is threaded from session pre-create through the extraction pipeline
+- Hits `/api/memory/extract` → AI extracts normalized signals → `upsertMemories()`
+- Memory evolves *during* the conversation, not just after
+
+### Weight evolution
+- New memory: `weight=1.0`, `seenCount=1`
+- Same signal again: `weight += 0.5` (cap 5.0), `seenCount++`
+- Pinned: recency updated, weight preserved
+
+### Decay
+- Non-blocking after every session finalize
+- `newWeight = weight * 0.85 ^ weeksInactive` (1 week grace)
+- Below 0.15 → deactivated (soft delete)
+
+### Brain injection
+- `getMemoriesForBrain(5)` — sorted: pinned > weight > recency
+- Profile summary → stable identity layer
+- Pattern summary → last session arc
+- Top 5 weighted memories → fast-changing atomic signals
+
+---
+
+## How The Behavior Layer Works (Phase 3)
+
+```
+User turn arrives
+  → state.ts detects emotion (low/neutral/high) + intent (vent/reflect/ask/casual)
+  → turn.ts returns TurnGuidance { shouldRespond, shouldAskQuestion, shouldSuppressResponse, responseStyle, suggestedDelay }
+  → handlers.ts fires turn:guidance CustomEvent
+  → useRealtime.ts listener:
+      - if shouldSuppressResponse → sends response.cancel to OpenAI
+      - else → builds instruction fragment via buildInstructionFragment(responseStyle)
+      - sends paced session.update after suggestedDelay ms
+      - deduplication guard: skips if responseStyle unchanged from last update
+```
+
+Response styles: `reflective` | `collaborative` | `brief` | `silent`
+
+---
+
+## How The Session Lifecycle Works
+
+```
+User connects voice
+  → POST /api/sessions/start → creates JournalSession { status: IN_PROGRESS }
+  → sessionId stored in client, threaded through extraction:tick events
+
+Every 5 user turns
+  → extraction:tick fires with sessionId
+  → POST /api/memory/extract → upsertMemories(userId, sessionId, ...)
+
+User ends session
+  → client sends turns + sessionId to POST /api/sessions/finalize
+  → finalizeSession updates existing IN_PROGRESS record (or creates fresh for manual)
+  → AI generates structured artifact (title, summary, mood, themes, bullets, tasks)
+  → upsertMemories() again with full session context
+  → decayMemories() non-blocking
+  → prunes transcripts older than latest 5
+```
+
+---
+
+## Current Model Split
+
+| Role | Model |
+|---|---|
+| Realtime voice conversation | `gpt-realtime-mini` |
+| Signal extraction (live + post-session) | `gpt-5.4-nano` |
+| Post-session summary + artifact | `OPENAI_SUMMARY_MODEL` (default: `gpt-5.4-nano`) |
 
 ---
 
 ## Important Files
 
-### Core app shell and product UI
-- `app/page.tsx`
-- `app/_components/today-hub.tsx`
-- `app/_components/app-nav.tsx`
-- `app/sessions/page.tsx`
-- `app/sessions/[id]/page.tsx`
+### Core product UI
+- `app/page.tsx` + `app/_components/today-hub.tsx`
+- `app/sessions/page.tsx` + `app/sessions/[id]/page.tsx`
 - `app/profile/page.tsx`
+- `app/login/page.tsx`
+- `app/_components/app-nav.tsx`
 
 ### Editing surfaces
 - `app/_components/session-artifact-editor.tsx`
@@ -144,217 +226,69 @@ Design:
 - `app/api/realtime/route.ts`
 - `app/realtime/client.ts`
 - `app/realtime/useRealtime.ts`
+- `app/realtime/handlers.ts`
 - `app/realtime/types.ts`
 
-### Memory + brain layer (fully separated)
+### Behavior + brain layer
+- `lib/state.ts` — emotion + intent detection
+- `lib/turn.ts` — TurnGuidance per state + mode
+- `lib/timing.ts` — silence threshold + response delay
+- `lib/brain.ts` — 3-layer system instruction builder
 - `lib/memory.ts` — upsert/decay/read for ProfileMemory
-- `lib/extractor.ts` — atomic signal extractor (gpt-5.4-nano)
-- `lib/brain.ts` — builds 3-layer system instructions
-- `lib/state.ts` — emotion + intent detection (rule-based v1)
-- `lib/turn.ts` — turn manager: response guidance per state + mode
-- `lib/timing.ts` — silence detection + response delay logic
+- `lib/extractor.ts` — AI signal extractor
 
-### Summary / persistence
-- `lib/session-summary.ts`
-- `lib/session-finalizer.ts`
+### Auth
+- `lib/auth.ts` — NextAuth export (with dev bypass)
+- `lib/auth.config.ts` — providers + JWT strategy
+- `middleware.ts` — route protection
+
+### Session pipeline
+- `lib/session-finalizer.ts` — all DB ops: start, finalize, queries
 - `lib/session-types.ts`
 - `lib/prisma.ts`
 - `prisma/schema.prisma`
 
 ---
 
-## How The Memory System Works
+## Environment Variables
 
-### Memory layers (3 time scales)
-
-```
-Atomic memory     → fast-changing    (weight evolves per session)
-Pattern summary   → medium stability (one sentence, per session)
-Profile           → slow-changing    (rolling paragraph, cumulative)
-```
-
-### Upsert + weight evolution
-- New memory: `weight=1.0`, `seenCount=1`
-- Same signal again: `weight += 0.5` (cap at 5.0), `seenCount++`
-- Pinned memories: recency updated, weight preserved
-
-### Decay
-- Runs non-blocking after every session finalize
-- `newWeight = weight * 0.85 ^ weeksInactive` (grace: 1 week)
-- Below 0.15 → deactivated (soft delete, not hard delete)
-
-### Brain injection
-- `getMemoriesForBrain(5)` — sorted: pinned > weight > recency
-- Injected as "Recent context" in system instructions
-- Profile summary = stable identity layer
-- Pattern summary = last session arc (bridge between atomic + profile)
-
-### Signal extraction
-- `lib/extractor.ts` extracts one normalized signal per turn
-- Uses: `gpt-5.4-nano`
-- Output: stable third-person strings → `"tends to feel drained after long work sessions"`
-- Exact-match dedup works reliably because the LLM is prompted for consistency
-
----
-
-## How The Session Artifact Pipeline Works
-
-When a session ends:
-1. Client sends ordered turns to `/api/sessions/finalize`
-2. Server saves raw session + turns
-3. Summary model generates structured JSON:
-   - title (vivid, session-specific)
-   - sessionSummary (warm, first-person)
-   - keyThemes (1–4)
-   - rapidLogBullets (bullet-journal style, 1–5)
-   - actionItems (concrete only, max 3)
-   - mood (specific, 1–3 words)
-   - **patternSummary** (one-sentence arc — new)
-   - profileSummary (rolling paragraph — updated)
-   - memories (normalized, max 5 — new cap)
-4. Saves summary + tasks to DB
-5. Runs `upsertMemories()` with weight evolution
-6. Runs `decayMemories()` non-blocking
-7. Prunes raw transcripts older than latest 5
-
-If summary generation fails:
-- Raw session still saved
-- Status → `SUMMARY_FAILED`
-- Processing error stored
-- Failure path intentional and preserved
-
----
-
-## Current Model Split
-
-| Role | Model |
-|---|---|
-| Realtime voice conversation | `gpt-realtime-mini` |
-| Signal extraction | `gpt-5.4-nano` |
-| Post-session summary + memory | `OPENAI_SUMMARY_MODEL` (default: `gpt-5.4-nano`) |
-
----
-
-## Environment
-
-Expected env vars:
+Required:
 - `OPENAI_API_KEY`
-- `DATABASE_URL`
-- `OPENAI_SUMMARY_MODEL`
+- `NEXTAUTH_SECRET`
+- `NEXTAUTH_URL`
+- `GOOGLE_ID` + `GOOGLE_SECRET` (for production)
+- `GITHUB_ID` + `GITHUB_SECRET` (optional, dev convenience)
 
-See `.env.example`.
-
----
-
-## How To Run Locally
-
-```bash
-npm run dev
-```
-
-Useful DB commands:
-```bash
-npx prisma db push
-npx prisma generate
-```
-
-Verification:
-```bash
-npm run lint
-npm run build
-```
+Optional:
+- `OPENAI_SUMMARY_MODEL` (defaults to `gpt-5.4-nano`)
+- `DATABASE_URL` (defaults to SQLite `file:./dev.db`)
+- `SKIP_AUTH_FOR_DEV=true` (local dev only, never in production)
 
 ---
 
 ## Validation Status
 
-Validated locally after this phase:
+Last full build: 2026-04-07
 - `npx prisma db push` ✓
 - `npx prisma generate` ✓
-- `npm run lint` ✓
-- `npm run build` ✓
-
-Build succeeds. All 13 routes compile.
+- `npx tsc --noEmit` ✓ (zero errors)
+- `npm run build` ✓ (17 routes)
 
 ---
 
-## Known Issues / Rough Edges
+## Known Issues
 
-### 1. Turbopack workspace-root warning
-`npm run build` shows a non-blocking warning about multiple lockfiles and inferred workspace root. Does not break the build.
+### 1. FK error for dev mock user
+Creating a voice session fails with a foreign key constraint if the dev user (`dev-user-001`) doesn't exist in the `User` table. Fix: seed via Prisma Studio (see Local Development above).
 
-### 2. README is outdated
-`README.md` is still the default create-next-app file.
+### 2. OAuth not configured locally
+Google and GitHub OAuth credentials aren't set up. Use `SKIP_AUTH_FOR_DEV=true` for local testing.
 
-### 3. Extractor not wired to live session yet
-`lib/extractor.ts` exists and works, but is not yet called mid-session. Currently, signal extraction only happens at session end (inside the summary pipeline implicitly via the LLM).
+### 3. Turbopack workspace-root warning
+Non-blocking build warning about multiple lockfiles. Does not affect runtime.
 
-Next step: wire `extractSignalsFromTurns()` to run on user turns during a live session, then call `upsertMemories()` immediately — so memory evolves *during* the conversation, not just after.
+### 4. Phase 4 (timing.ts VAD) not wired
+`getTimingConfig()` from `lib/timing.ts` is not yet passed into session.update's `turn_detection` field. The behavior layer fires correctly; this is a tuning optimization only.
 
-### 4. `state.ts` / `turn.ts` / `timing.ts` not wired to the realtime client yet
-These modules exist with the right interfaces, but the realtime `client.ts` and `useRealtime.ts` don't call them yet. They are stubs ready to be connected.
-
-### 5. No auth / multi-user support
-Intentionally single-user.
-
----
-
-## Mapping Against `reference.txt`
-
-### Fully aligned
-- Realtime session lifecycle ✓
-- `session.update` support ✓
-- Memory layer ✓ (now with weight + decay)
-- Mode system ✓
-- Saved artifacts ✓
-- Storage ✓
-- `brain.ts` ✓ (3-layer instruction model)
-- `memory.ts` ✓ (separate module)
-- `extractor.ts` ✓ (separate module, stub-wired)
-- `state.ts` ✓
-- `turn.ts` ✓
-- `timing.ts` ✓
-
-### Not yet wired
-- `handlers.ts` — event handler split from `client.ts` (still inline)
-- Live mid-session extraction — extractor exists but not called during conversation
-- `state.ts` / `turn.ts` / `timing.ts` — not yet connected to realtime client
-
----
-
-## Recommended Next Steps
-
-### Highest value right now
-
-**1. Wire the realtime client to the behavior layer**
-
-Connect `state.ts`, `turn.ts`, `timing.ts` into `app/realtime/client.ts` and `useRealtime.ts` so the behavior layer actually influences live conversations. This is the biggest gap between what exists on paper and what runs at runtime.
-
-**2. Wire live memory extraction**
-
-Call `extractSignalsFromTurns()` at end of session (or every N turns) and run `upsertMemories()` immediately. This closes the loop: memory evolves during conversation, not just after.
-
-**3. Split `handlers.ts` from `client.ts`**
-
-Extract the event listener logic from `app/realtime/client.ts` into `app/realtime/handlers.ts` per the reference spec. Small refactor, high architectural clarity.
-
-**4. UI polish pass**
-
-The Today Hub and session detail views are functional. Making them feel more premium (animations, memory weight visualization, pattern summary display) would significantly improve the product feel.
-
-**5. README cleanup**
-
-Replace the default README with a real product description.
-
----
-
-## If You Are Picking This Up Next
-
-Start here:
-- `lib/memory.ts` — understand the weight system
-- `lib/brain.ts` — see how the 3-layer instructions are built
-- `app/realtime/client.ts` — this is where behavior layer wiring goes next
-- `app/_components/today-hub.tsx` — the main product surface
-- `prisma/schema.prisma` — the full data model
-
-The memory architecture is solid. The next phase is connecting it to the live conversation loop.
+### 5. README is outdated
+Still the default create-next-app file.
