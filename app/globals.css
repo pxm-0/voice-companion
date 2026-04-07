@@ -27,6 +27,14 @@ body {
   font-family: var(--font-sans-stack);
 }
 
+@keyframes breathe-gentle {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.008); }
+}
+.animate-breathe-gentle {
+  animation: breathe-gentle 4s ease-in-out infinite;
+}
+
 @keyframes slideUp {
   from {
     opacity: 0;

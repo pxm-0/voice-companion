@@ -5,7 +5,7 @@ export default function LoginPage() {
     <main className="flex min-h-screen items-center justify-center bg-[linear-gradient(180deg,#f5ede2_0%,#efe4d6_45%,#e8ddcf_100%)] p-4 text-[#2f241d]">
       <div className="w-full max-w-sm rounded-[32px] border border-[#dbcdb8] bg-[#fffaf2] p-8 shadow-[0_18px_50px_rgba(92,63,39,0.08)]">
         <div className="text-center">
-          <p className="text-[11px] uppercase tracking-[0.34em] text-[#9f7c63]">Companion Journal</p>
+          <p className="font-[family-name:Georgia,serif] text-2xl text-[#2f241d]">eli</p>
           <h1 className="mt-3 font-[family-name:Georgia,serif] text-3xl text-[#31251d]">Welcome Back</h1>
           <p className="mt-2 text-sm leading-6 text-[#705d4e]">Sign in to access your journal and memories.</p>
         </div>

@@ -141,7 +141,7 @@ function buildPrompt(input: SummaryGenerationInput) {
     .join("\n")
 
   return [
-    "You are updating a cozy companion journal and second-brain system.",
+    "You are Eli, a cozy voice companion that helps users journal and think out loud.",
     "Return JSON that matches the provided schema exactly.",
     "",
     "## Artifact quality rules",

@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react"
+import { useEffect, useRef, useState, useMemo, type FormEvent } from "react"
 import { buildInstructions, getModeDescription, getModeLabel } from "@/lib/brain"
 import type {
   CompanionMode,
@@ -23,12 +23,6 @@ function upsertTurn(turns: TranscriptTurn[], next: TranscriptTurn) {
   return updated
 }
 
-function memoryWeightOpacity(weight?: number): number {
-  if (weight === undefined) return 0.75
-  // 1.0 → 0.65 opacity, 5.0 → 1.0 opacity
-  return Math.min(1, Math.max(0.45, 0.5 + weight * 0.1))
-}
-
 type TodayHubProps = {
   data: TodayHubData
 }
@@ -36,20 +30,32 @@ type TodayHubProps = {
 export function TodayHub({ data }: TodayHubProps) {
   const router = useRouter()
   const [mode, setModeState] = useState<CompanionMode>("think_with_me")
+  const [showModeMenu, setShowModeMenu] = useState(false)
   const [turns, setTurns] = useState<TranscriptTurn[]>([])
   const [sessionStartedAt, setSessionStartedAt] = useState<string | null>(null)
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle")
   const [saveError, setSaveError] = useState<string | null>(null)
   const [savedSession, setSavedSession] = useState<FinalizeSessionResponse | null>(null)
+  const [showManualLog, setShowManualLog] = useState(false)
   const [manualText, setManualText] = useState("")
   const [manualState, setManualState] = useState<"idle" | "saving" | "saved" | "error">("idle")
   const [manualError, setManualError] = useState<string | null>(null)
   const [guidanceEvent, setGuidanceEvent] = useState<TurnGuidanceEvent | null>(null)
+  const [timeGreeting, setTimeGreeting] = useState("Good morning.")
   const transcriptEndRef = useRef<HTMLDivElement | null>(null)
+  const modeMenuRef = useRef<HTMLDivElement | null>(null)
 
   const { connected, connecting, connect, disconnect, updateInstructions, setMode } = useRealTime({
     onTurnGuidance: setGuidanceEvent,
   })
+
+  // Time-of-day greeting (client-only to avoid hydration mismatch)
+  useEffect(() => {
+    const h = new Date().getHours()
+    if (h < 12) setTimeGreeting("Good morning.")
+    else if (h < 17) setTimeGreeting("Good afternoon.")
+    else setTimeGreeting("Good evening.")
+  }, [])
 
   // Persist mode across sessions
   useEffect(() => {
@@ -74,7 +80,6 @@ export function TodayHub({ data }: TodayHubProps) {
       const e = event as CustomEvent<TranscriptTurn>
       setTurns((prev) => upsertTurn(prev, { ...e.detail, status: "final" }))
     }
-
     window.addEventListener("transcript:update", onTranscriptUpdate)
     window.addEventListener("transcript:final", onTranscriptFinal)
     return () => {
@@ -83,12 +88,23 @@ export function TodayHub({ data }: TodayHubProps) {
     }
   }, [])
 
-  // Auto-scroll transcript to bottom
+  // Auto-scroll transcript
   useEffect(() => {
     transcriptEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [turns])
 
-  // Derive latest pattern summary from today's sessions
+  // Close mode menu on outside click
+  useEffect(() => {
+    if (!showModeMenu) return
+    const handler = (e: MouseEvent) => {
+      if (modeMenuRef.current && !modeMenuRef.current.contains(e.target as Node)) {
+        setShowModeMenu(false)
+      }
+    }
+    document.addEventListener("mousedown", handler)
+    return () => document.removeEventListener("mousedown", handler)
+  }, [showModeMenu])
+
   const latestPatternSummary = useMemo(() => {
     for (const session of data.sessions) {
       if (session.artifact?.patternSummary) return session.artifact.patternSummary
@@ -113,8 +129,6 @@ export function TodayHub({ data }: TodayHubProps) {
     }
   }, [connected, instructions, updateInstructions])
 
-  const transcriptCount = turns.length
-  const latestTurn = transcriptCount > 0 ? turns[transcriptCount - 1] : null
   const isHighEmotion =
     guidanceEvent?.state.emotion === "high" || guidanceEvent?.state.intent === "vent"
 
@@ -128,6 +142,7 @@ export function TodayHub({ data }: TodayHubProps) {
 
     try {
       await connect({ instructions, mode })
+      window.dispatchEvent(new CustomEvent("session:start"))
     } catch (error) {
       setSessionStartedAt(null)
       setSaveState("error")
@@ -147,6 +162,7 @@ export function TodayHub({ data }: TodayHubProps) {
       }))
 
     disconnect()
+    window.dispatchEvent(new CustomEvent("session:end"))
     setSessionStartedAt(null)
     setGuidanceEvent(null)
 
@@ -187,6 +203,13 @@ export function TodayHub({ data }: TodayHubProps) {
     }
   }
 
+  // Allow nav "End session" button to trigger disconnect
+  useEffect(() => {
+    const handler = () => { void handleDisconnect() }
+    window.addEventListener("session:request-end", handler)
+    return () => window.removeEventListener("session:request-end", handler)
+  }, [turns, sessionStartedAt, mode, connected])
+
   async function handleManualSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
@@ -218,6 +241,7 @@ export function TodayHub({ data }: TodayHubProps) {
       setSavedSession(result as FinalizeSessionResponse)
       setManualState("saved")
       setManualText("")
+      setShowManualLog(false)
       router.refresh()
     } catch (error) {
       setManualState("error")
@@ -225,369 +249,267 @@ export function TodayHub({ data }: TodayHubProps) {
     }
   }
 
+  const inSession = connected || connecting
+
   return (
-    <main className="min-h-full bg-[linear-gradient(180deg,#f5ede2_0%,#efe4d6_42%,#e8ddcf_100%)] px-4 py-6 text-[#2f241d] sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-6xl space-y-6">
-
-        {/* ── Header ── */}
-        <section className="overflow-hidden rounded-[32px] border border-[#dbcdb8] bg-[linear-gradient(135deg,#fffaf1_0%,#f7efe2_46%,#efe2d4_100%)] p-6 shadow-[0_24px_70px_rgba(92,63,39,0.10)] sm:p-8">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-2xl">
-              <p className="text-[11px] uppercase tracking-[0.34em] text-[#9e7f65]">Today Hub</p>
-              <h1 className="mt-3 font-[family-name:Georgia,serif] text-4xl leading-tight text-[#31251d] sm:text-5xl">
-                Cozy voice journaling with a second brain behind it.
-              </h1>
-              <p className="mt-4 max-w-xl text-sm leading-7 text-[#705d4e] sm:text-base">
-                Start a voice check-in, jot a quick manual log, and let the app turn it into a
-                journal artifact with bullets, themes, tasks, and memory you can revisit later.
-              </p>
-            </div>
-
-            <div className="rounded-[28px] border border-[#dccab4] bg-[#fff9f1]/90 px-5 py-4 text-right shadow-[0_10px_24px_rgba(111,81,56,0.06)]">
-              <p className="text-[11px] uppercase tracking-[0.28em] text-[#9f7c63]">Today</p>
-              <p className="mt-2 font-[family-name:Georgia,serif] text-2xl text-[#382b22]">
-                {data.todayLabel}
-              </p>
-              <p className="mt-2 text-sm text-[#7f6b5b]">
-                {data.sessions.length} {data.sessions.length === 1 ? "entry" : "entries"} captured
-                today
-              </p>
+    <>
+      {/* ── Session active overlay ── */}
+      {inSession && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-[linear-gradient(180deg,#f5ede2_0%,#efe4d6_60%,#e8ddcf_100%)]">
+          {/* Minimal session header */}
+          <div className="flex items-center justify-between border-b border-[#dacbb7] bg-[rgba(245,237,226,0.92)] px-6 py-4 backdrop-blur-xl">
+            <span className="font-[family-name:Georgia,serif] text-2xl text-[#2f241d]">eli</span>
+            <div className="flex items-center gap-3">
+              {guidanceEvent && connected && (
+                <span
+                  className={`h-2 w-2 rounded-full ${isHighEmotion ? "bg-[#c96a58]" : "bg-[#7aad82]"}`}
+                  title={guidanceEvent.state.intent}
+                />
+              )}
+              <span className="text-sm text-[#7a624f]">
+                {connected ? "Listening live" : "Starting…"}
+              </span>
             </div>
           </div>
 
-          {/* Mode selector */}
-          <div className="mt-6 flex flex-wrap gap-3">
-            {COMPANION_MODES.map((value) => {
-              const active = value === mode
-              return (
-                <button
-                  key={value}
-                  type="button"
-                  id={`mode-${value}`}
-                  onClick={() => setModeState(value)}
-                  className={`rounded-full border px-4 py-2 text-sm transition-all ${
-                    active
-                      ? "border-[#a86a4a] bg-[#a86a4a] text-[#fff8ef] shadow-[0_8px_24px_rgba(168,106,74,0.20)]"
-                      : "border-[#d9c9b2] bg-[#fff9f2] text-[#654f40] hover:bg-[#f8efe4]"
-                  }`}
-                >
-                  {getModeLabel(value)}
-                </button>
-              )
-            })}
-          </div>
-          <p className="mt-3 text-sm text-[#7d6959]">{getModeDescription(mode)}</p>
-        </section>
-
-        {/* ── Main grid ── */}
-        <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-
-          {/* Voice check-in */}
-          <section className="overflow-hidden rounded-[32px] border border-[#dbcdb8] bg-[#fffaf2] p-6 shadow-[0_18px_50px_rgba(92,63,39,0.08)]">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div className="max-w-xl">
-                <p className="text-[11px] uppercase tracking-[0.28em] text-[#9f7c63]">
-                  Voice Check-In
-                </p>
-                <h2 className="mt-2 font-[family-name:Georgia,serif] text-3xl text-[#31251d]">
-                  Talk it through out loud.
-                </h2>
-                <p className="mt-3 text-sm leading-7 text-[#705d4e]">
-                  The voice stack stays fast and natural, while the product quietly turns what you
-                  say into a journal entry with tasks, themes, and memory.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2 rounded-full border border-[#dccab4] bg-[#fff6ea] px-4 py-2 text-sm text-[#7a624f]">
-                {connected && guidanceEvent && (
-                  <span
-                    className={`h-2 w-2 rounded-full ${isHighEmotion ? "bg-[#c96a58]" : "bg-[#7aad82]"} animate-fade-in`}
-                    title={guidanceEvent.state.intent}
-                  />
-                )}
-                <span>
-                  {connected ? "Listening live" : connecting ? "Connecting" : "Ready"}
+          {/* Orb + transcript + stop */}
+          <div className="flex flex-1 flex-col items-center justify-center gap-8 overflow-y-auto px-4 py-8">
+            <button
+              disabled
+              aria-label="Eli is listening"
+              className={`relative flex h-52 w-52 flex-shrink-0 items-center justify-center rounded-full border ${
+                connected
+                  ? isHighEmotion
+                    ? "animate-breathe-high border-[#ba6e58] bg-[radial-gradient(circle_at_35%_30%,#f2907a_0%,#c96d58_42%,#7a3f33_100%)]"
+                    : "animate-breathe border-[#ba6e58] bg-[radial-gradient(circle_at_35%_30%,#f2a08b_0%,#c96d58_42%,#7a3f33_100%)]"
+                  : "border-[#c7a47e] bg-[radial-gradient(circle_at_35%_30%,#f1dfbf_0%,#c7a47e_42%,#7f664f_100%)]"
+              }`}
+            >
+              <span className="pointer-events-none absolute inset-3 rounded-full border border-white/20" />
+              {guidanceEvent && connected && (
+                <span className="relative text-xs capitalize text-white/70">
+                  {guidanceEvent.state.intent}
                 </span>
-              </div>
-            </div>
+              )}
+            </button>
 
-            <div className="mt-6 flex flex-col gap-6 xl:flex-row xl:items-start">
-              {/* Orb */}
-              <div className="flex flex-col items-center xl:w-56">
-                <button
-                  id="voice-session-button"
-                  onClick={connected ? handleDisconnect : handleConnect}
-                  disabled={connecting}
-                  className={`relative flex h-44 w-44 items-center justify-center rounded-full border text-center transition-transform duration-300 ${
-                    connected
-                      ? isHighEmotion
-                        ? "animate-breathe-high border-[#ba6e58] bg-[radial-gradient(circle_at_35%_30%,#f2907a_0%,#c96d58_42%,#7a3f33_100%)] text-white"
-                        : "animate-breathe border-[#ba6e58] bg-[radial-gradient(circle_at_35%_30%,#f2a08b_0%,#c96d58_42%,#7a3f33_100%)] text-white"
-                      : connecting
-                        ? "cursor-wait border-[#c7a47e] bg-[radial-gradient(circle_at_35%_30%,#f1dfbf_0%,#c7a47e_42%,#7f664f_100%)] text-[#fff8ef]"
-                        : "border-[#b9825d] bg-[radial-gradient(circle_at_35%_30%,#f4ceb0_0%,#d4976d_42%,#8e5a43_100%)] text-white hover:scale-[1.01]"
-                  }`}
-                >
-                  <span className="pointer-events-none absolute inset-3 rounded-full border border-white/20" />
-                  <span className="relative flex flex-col gap-2">
-                    <span className="text-[11px] uppercase tracking-[0.28em] text-white/75">
-                      {connected ? "Session On" : connecting ? "Starting" : "Ready"}
-                    </span>
-                    <span className="text-2xl font-semibold">
-                      {connected ? "Stop" : connecting ? "Wait" : "Start"}
-                    </span>
-                    <span className="mx-auto max-w-[9rem] text-xs leading-relaxed text-white/80">
-                      {connected ? "Finish and save this session" : "Begin a spoken check-in"}
-                    </span>
-                  </span>
-                </button>
-
-                <div className="mt-5 w-full rounded-[24px] border border-[#e1d2bf] bg-[#fff8ef] p-4 text-sm text-[#6f5a4a]">
-                  <p className="text-[11px] uppercase tracking-[0.28em] text-[#9f7c63]">
-                    Current Mode
-                  </p>
-                  <p className="mt-2 font-medium text-[#362a21]">{getModeLabel(mode)}</p>
-                  <p className="mt-2 leading-6">{getModeDescription(mode)}</p>
-
-                  {guidanceEvent && connected && (
-                    <div className="mt-3 border-t border-[#e4d7c8] pt-3 animate-fade-in">
-                      <p className="text-[11px] uppercase tracking-[0.28em] text-[#9f7c63]">
-                        Tone detected
-                      </p>
-                      <p className="mt-1 capitalize text-[#5a4538]">
-                        {guidanceEvent.state.intent} ·{" "}
-                        <span
-                          className={
-                            guidanceEvent.state.emotion === "high"
-                              ? "text-[#b05040]"
-                              : guidanceEvent.state.emotion === "low"
-                                ? "text-[#7a9e7c]"
-                                : "text-[#6f5a4a]"
-                          }
-                        >
-                          {guidanceEvent.state.emotion}
+            {/* Transcript */}
+            <div className="w-full max-w-xl">
+              <div
+                className="h-[38vh] overflow-y-auto pr-1"
+                role="log"
+                aria-live="polite"
+                aria-atomic="false"
+              >
+                <div className="space-y-3">
+                  {turns.length === 0 ? (
+                    <p className="py-8 text-center text-sm text-[#7a6858]">
+                      Your words will appear here as you speak.
+                    </p>
+                  ) : (
+                    turns.map((turn) => (
+                      <article
+                        key={turn.id}
+                        className={`animate-slide-up max-w-[90%] rounded-[24px] border px-4 py-3 shadow-[0_8px_24px_rgba(111,81,56,0.08)] ${
+                          turn.role === "user"
+                            ? "ml-auto border-[#d9b08d] bg-[#f7e5d4] text-[#3a2c22]"
+                            : "mr-auto border-[#d6d8c7] bg-[#eef1e7] text-[#243126]"
+                        }`}
+                      >
+                        <span className="text-[11px] uppercase tracking-[0.26em] text-black/45">
+                          {turn.role === "user" ? "You" : "Eli"}
                         </span>
-                      </p>
-                    </div>
+                        <p className="mt-2 whitespace-pre-wrap text-sm leading-7">
+                          {turn.text || "…"}
+                        </p>
+                      </article>
+                    ))
                   )}
+                  <div ref={transcriptEndRef} />
                 </div>
-              </div>
-
-              {/* Transcript */}
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between gap-4 border-b border-[#eadfce] pb-4">
-                  <div>
-                    <p className="text-[11px] uppercase tracking-[0.28em] text-[#9f7c63]">
-                      Live Notebook
-                    </p>
-                    <h3 className="mt-2 text-xl font-semibold text-[#31251d]">
-                      Conversation in motion
-                    </h3>
-                  </div>
-                  <div className="text-right text-xs text-[#857261]">
-                    <p>{transcriptCount} turns</p>
-                    <p>
-                      {connected
-                        ? "Session active"
-                        : connecting
-                          ? "Session starting"
-                          : saveState === "saving"
-                            ? "Finalizing session"
-                            : "Idle"}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-4 h-[22rem] overflow-y-auto pr-1">
-                  <div className="space-y-3">
-                    {turns.length === 0 ? (
-                      <div className="flex h-full min-h-72 items-center justify-center rounded-[24px] border border-dashed border-[#ddd0bd] bg-[#fff7ed] p-8 text-center">
-                        <div className="max-w-sm">
-                          <p className="text-sm uppercase tracking-[0.3em] text-[#9f7c63]">
-                            Standby
-                          </p>
-                          <p className="mt-4 font-[family-name:Georgia,serif] text-2xl text-[#382b22]">
-                            Your spoken notes will gather here.
-                          </p>
-                          <p className="mt-3 text-sm leading-7 text-[#7a6858]">
-                            The live session remains fast and lightweight. The richer journaling
-                            happens after you stop and save.
-                          </p>
-                        </div>
-                      </div>
-                    ) : (
-                      turns.map((turn) => (
-                        <article
-                          key={turn.id}
-                          className={`animate-slide-up max-w-[92%] rounded-[24px] border px-4 py-3 shadow-[0_8px_24px_rgba(111,81,56,0.08)] ${
-                            turn.role === "user"
-                              ? "ml-auto border-[#d9b08d] bg-[#f7e5d4] text-[#3a2c22]"
-                              : "mr-auto border-[#d6d8c7] bg-[#eef1e7] text-[#243126]"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between gap-4">
-                            <span className="text-[11px] uppercase tracking-[0.26em] text-black/45">
-                              {turn.role === "user" ? "You" : "Companion"}
-                            </span>
-                            <span className="text-[10px] uppercase tracking-[0.24em] text-black/35">
-                              {turn.status}
-                            </span>
-                          </div>
-                          <p className="mt-3 whitespace-pre-wrap text-sm leading-7">
-                            {turn.text || "..."}
-                          </p>
-                        </article>
-                      ))
-                    )}
-                    <div ref={transcriptEndRef} />
-                  </div>
-                </div>
-
-                {(saveState !== "idle" || savedSession) && (
-                  <div className="mt-4 animate-fade-in rounded-[24px] border border-[#dfd2bf] bg-[#fff8ee] p-4 text-sm leading-7 text-[#664e3e]">
-                    {saveState === "saving" && (
-                      <p>Saving the session, drafting the journal artifact, and refreshing memory now.</p>
-                    )}
-                    {saveState === "error" && (
-                      <p className="text-[#9c4c40]">{saveError ?? "The session could not be finalized."}</p>
-                    )}
-                    {saveState === "saved" && savedSession && (
-                      <div className="space-y-2">
-                        <p>
-                          Saved as{" "}
-                          <Link
-                            href={`/sessions/${savedSession.sessionId}`}
-                            className="font-medium text-[#7d4f39] underline decoration-[#cf9c7d] underline-offset-4"
-                          >
-                            {savedSession.artifact?.title ?? "new journal entry"}
-                          </Link>
-                          .
-                        </p>
-                        <p>
-                          {savedSession.artifact?.summary ??
-                            "The transcript was saved, but the artifact still needs attention."}
-                        </p>
-                        {savedSession.artifact?.patternSummary && (
-                          <p className="italic text-[#7a6555]">
-                            {savedSession.artifact.patternSummary}
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
             </div>
-          </section>
 
-          {/* Right column */}
-          <div className="space-y-6">
+            <button
+              onClick={() => void handleDisconnect()}
+              disabled={!connected}
+              aria-label="Stop and save this session"
+              className="min-h-[48px] w-full max-w-xs rounded-full bg-[#5c735f] px-6 py-3 text-sm font-medium text-[#f7fbf5] transition-colors hover:bg-[#49604c] disabled:opacity-50"
+            >
+              Stop and save
+            </button>
+
+            {saveState === "error" && (
+              <p className="text-sm text-[#9c4c40]">{saveError ?? "The session could not be finalized."}</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Ambient home ── */}
+      <main className="min-h-full bg-[linear-gradient(180deg,#f5ede2_0%,#efe4d6_42%,#e8ddcf_100%)] px-4 py-10 text-[#2f241d] sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-2xl space-y-10">
+
+          {/* Greeting + orb + mode */}
+          <section className="flex flex-col items-center gap-6 text-center">
+            <div>
+              <h1 className="font-[family-name:Georgia,serif] text-4xl text-[#31251d] sm:text-5xl">
+                {timeGreeting}
+              </h1>
+              <p className="mt-2 text-sm text-[#7d6959]">
+                {data.sessions.length === 0
+                  ? "Nothing captured yet today."
+                  : `${data.sessions.length} ${data.sessions.length === 1 ? "entry" : "entries"} today`}
+              </p>
+            </div>
+
+            {/* Orb */}
+            <button
+              id="voice-session-button"
+              onClick={() => void handleConnect()}
+              disabled={connecting}
+              aria-label={connecting ? "Connecting to Eli, please wait" : "Start voice session with Eli"}
+              className={`relative flex h-48 w-48 items-center justify-center rounded-full border transition-all duration-300 focus-visible:ring-2 focus-visible:ring-[#a86a4a] focus-visible:ring-offset-4 ${
+                connecting
+                  ? "cursor-wait border-[#c7a47e] bg-[radial-gradient(circle_at_35%_30%,#f1dfbf_0%,#c7a47e_42%,#7f664f_100%)]"
+                  : "animate-breathe-gentle border-[#b9825d] bg-[radial-gradient(circle_at_35%_30%,#f4ceb0_0%,#d4976d_42%,#8e5a43_100%)] hover:scale-[1.015]"
+              }`}
+            >
+              <span className="pointer-events-none absolute inset-3 rounded-full border border-white/20" />
+              {connecting && (
+                <span className="relative text-xs uppercase tracking-[0.28em] text-white/70">
+                  Starting…
+                </span>
+              )}
+            </button>
+
+            {/* Mode pill */}
+            <div className="relative" ref={modeMenuRef}>
+              <button
+                onClick={() => setShowModeMenu((v) => !v)}
+                aria-label="Change companion mode"
+                aria-expanded={showModeMenu}
+                aria-haspopup="listbox"
+                className="flex items-center gap-1.5 rounded-full border border-[#dccab4] bg-[#fff9f1] px-4 py-2 text-sm text-[#654f40] transition-colors hover:bg-[#f8efe4]"
+              >
+                {getModeLabel(mode)}
+                <span className="text-[#9f7c63] text-xs">▾</span>
+              </button>
+
+              {showModeMenu && (
+                <div
+                  className="absolute left-1/2 top-full z-20 mt-2 w-72 -translate-x-1/2 rounded-[20px] border border-[#dccab4] bg-[#fffaf1] p-2 shadow-[0_16px_40px_rgba(92,63,39,0.14)]"
+                  role="listbox"
+                  aria-label="Companion mode"
+                >
+                  {COMPANION_MODES.map((value) => (
+                    <button
+                      key={value}
+                      role="option"
+                      aria-selected={value === mode}
+                      onClick={() => {
+                        setModeState(value)
+                        setShowModeMenu(false)
+                      }}
+                      className={`w-full rounded-[16px] px-4 py-3 text-left transition-colors ${
+                        value === mode
+                          ? "border-l-4 border-[#a86a4a] bg-[#fff3e8] text-[#31251d]"
+                          : "text-[#654f40] hover:bg-[#f8efe4]"
+                      }`}
+                    >
+                      <p className="font-[family-name:Georgia,serif] text-base">{getModeLabel(value)}</p>
+                      <p className="mt-0.5 text-xs leading-5 text-[#7d6959]">{getModeDescription(value)}</p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Post-session result card */}
+            {saveState === "saved" && savedSession && (
+              <div className="animate-slide-up w-full rounded-[28px] border border-[#dfd2bf] bg-[#fff8ee] p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-[11px] uppercase tracking-[0.28em] text-[#9f7c63]">Just saved</p>
+                    <h3 className="mt-2 font-[family-name:Georgia,serif] text-xl text-[#31251d]">
+                      {savedSession.artifact?.title ?? "New entry"}
+                    </h3>
+                    <p className="mt-2 text-sm leading-6 text-[#695646]">
+                      {savedSession.artifact?.summary ?? "Your session was saved."}
+                    </p>
+                  </div>
+                  <Link
+                    href={`/sessions/${savedSession.sessionId}`}
+                    className="shrink-0 rounded-full border border-[#dccab4] bg-[#fff9f1] px-3 py-1.5 text-xs text-[#7d4f39] transition-colors hover:bg-[#f8efe4]"
+                  >
+                    Read →
+                  </Link>
+                </div>
+              </div>
+            )}
+
+            {saveState === "error" && !inSession && (
+              <p className="text-sm text-[#9c4c40]">{saveError ?? "The session could not be finalized."}</p>
+            )}
+
+            {saveState === "saving" && (
+              <p className="text-sm text-[#7d6959]">Saving session and drafting your entry…</p>
+            )}
+
             {/* Manual log */}
-            <section className="rounded-[32px] border border-[#dbcdb8] bg-[#fffaf2] p-6 shadow-[0_18px_50px_rgba(92,63,39,0.08)]">
-              <p className="text-[11px] uppercase tracking-[0.28em] text-[#9f7c63]">
-                Quick Manual Log
-              </p>
-              <h2 className="mt-2 font-[family-name:Georgia,serif] text-2xl text-[#31251d]">
-                Type a bullet, dump a thought, keep moving.
-              </h2>
-              <p className="mt-3 text-sm leading-7 text-[#705d4e]">
-                Manual notes flow through the same summary and memory system as voice.
-              </p>
-
-              <form onSubmit={(event) => void handleManualSubmit(event)} className="mt-5 space-y-4">
+            {!showManualLog ? (
+              <button
+                onClick={() => setShowManualLog(true)}
+                className="py-2.5 text-sm text-[#7d4f39] underline decoration-[#cf9c7d] underline-offset-4"
+              >
+                Write a note instead
+              </button>
+            ) : (
+              <form
+                onSubmit={(event) => void handleManualSubmit(event)}
+                className="w-full space-y-3 text-left"
+              >
                 <textarea
                   id="manual-log-textarea"
                   value={manualText}
-                  onChange={(event) => setManualText(event.target.value)}
-                  rows={8}
+                  onChange={(e) => setManualText(e.target.value)}
+                  rows={5}
+                  autoFocus
                   placeholder="What feels worth capturing right now?"
                   className="w-full resize-none rounded-[24px] border border-[#e2d4c3] bg-[#fffdf8] px-4 py-4 text-sm leading-7 text-[#2f241d] outline-none transition-colors focus:border-[#d2a17f]"
                 />
-
                 <div className="flex items-center justify-between gap-4">
-                  <div className="text-xs text-[#8c7968]">
-                    Saved with {getModeLabel(mode)} mode.
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowManualLog(false)}
+                    className="text-sm text-[#9f7c63]"
+                  >
+                    Cancel
+                  </button>
                   <button
                     id="manual-log-submit"
                     type="submit"
                     disabled={manualState === "saving"}
-                    className="rounded-full bg-[#5c735f] px-5 py-2 text-sm font-medium text-[#f7fbf5] transition-colors hover:bg-[#49604c] disabled:cursor-wait disabled:opacity-70"
+                    className="rounded-full bg-[#5c735f] px-5 py-2 text-sm font-medium text-[#f7fbf5] transition-colors hover:bg-[#49604c] disabled:opacity-70"
                   >
-                    {manualState === "saving" ? "Saving" : "Save manual entry"}
+                    {manualState === "saving" ? "Saving…" : "Save"}
                   </button>
                 </div>
-              </form>
-
-              {manualState === "error" && (
-                <p className="mt-3 text-sm text-[#9c4c40]">{manualError}</p>
-              )}
-              {manualState === "saved" && (
-                <p className="mt-3 text-sm text-[#4f654f]">Manual entry saved and processed.</p>
-              )}
-            </section>
-
-            {/* Memory snapshot */}
-            <section className="rounded-[32px] border border-[#dbcdb8] bg-[#fffaf2] p-6 shadow-[0_18px_50px_rgba(92,63,39,0.08)]">
-              <div className="flex items-end justify-between gap-4">
-                <div>
-                  <p className="text-[11px] uppercase tracking-[0.28em] text-[#9f7c63]">
-                    Memory Snapshot
-                  </p>
-                  <h2 className="mt-2 font-[family-name:Georgia,serif] text-2xl text-[#31251d]">
-                    Your second brain, softly visible.
-                  </h2>
-                </div>
-                <Link
-                  href="/profile"
-                  className="text-sm text-[#7d4f39] underline decoration-[#cf9c7d] underline-offset-4"
-                >
-                  Open profile
-                </Link>
-              </div>
-
-              <p className="mt-4 text-sm leading-7 text-[#705d4e]">
-                {data.profile.summary ??
-                  "No rolling profile summary yet. Once you save a few sessions, this area will start to reflect stable patterns and preferences."}
-              </p>
-
-              {latestPatternSummary && (
-                <p className="mt-2 text-sm italic leading-6 text-[#8a7060] animate-fade-in">
-                  {latestPatternSummary}
-                </p>
-              )}
-
-              <div className="mt-5 flex flex-wrap gap-2">
-                {data.profile.memories.length > 0 ? (
-                  data.profile.memories.map((memory) => (
-                    <span
-                      key={memory.id}
-                      title={`Weight: ${memory.weight?.toFixed(1) ?? "—"}`}
-                      style={{ opacity: memoryWeightOpacity(memory.weight) }}
-                      className={`rounded-full border px-3 py-1 text-xs transition-opacity ${
-                        memory.pinned
-                          ? "border-[#c88862] bg-[#f3dcc8] text-[#6d4533]"
-                          : "border-[#ddd1bf] bg-[#fff7ef] text-[#7c6959]"
-                      }`}
-                    >
-                      {memory.content}
-                    </span>
-                  ))
-                ) : (
-                  <span className="text-sm text-[#8b7868]">No durable memory items yet.</span>
+                {manualState === "error" && (
+                  <p className="text-sm text-[#9c4c40]">{manualError}</p>
                 )}
-              </div>
-            </section>
-          </div>
-        </div>
+                {manualState === "saved" && (
+                  <p className="text-sm text-[#4f654f]">Saved.</p>
+                )}
+              </form>
+            )}
+          </section>
 
-        {/* ── Bottom grid ── */}
-        <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-          {/* Today's entries */}
-          <section className="rounded-[32px] border border-[#dbcdb8] bg-[#fffaf2] p-6 shadow-[0_18px_50px_rgba(92,63,39,0.08)]">
+          {/* ── Today's entries ── */}
+          <section>
             <div className="flex items-end justify-between gap-4">
               <div>
-                <p className="text-[11px] uppercase tracking-[0.28em] text-[#9f7c63]">
+                <p className="text-[11px] uppercase tracking-[0.28em] text-[#7a5e4a]">
                   Today&apos;s Entries
                 </p>
                 <h2 className="mt-2 font-[family-name:Georgia,serif] text-2xl text-[#31251d]">
@@ -596,17 +518,16 @@ export function TodayHub({ data }: TodayHubProps) {
               </div>
               <Link
                 href="/sessions"
-                className="text-sm text-[#7d4f39] underline decoration-[#cf9c7d] underline-offset-4"
+                className="shrink-0 text-sm text-[#7d4f39] underline decoration-[#cf9c7d] underline-offset-4"
               >
-                Open archive
+                All entries
               </Link>
             </div>
 
             <div className="mt-5 space-y-4">
               {data.sessions.length === 0 ? (
                 <div className="rounded-[24px] border border-dashed border-[#d9cbb7] bg-[#fffaf1] p-6 text-sm leading-7 text-[#756353]">
-                  No entries yet today. Start a voice check-in or save a quick manual log and the
-                  hub will begin to fill out.
+                  No entries yet today. Start a voice session or write a quick note.
                 </div>
               ) : (
                 data.sessions.map((session) => (
@@ -627,10 +548,10 @@ export function TodayHub({ data }: TodayHubProps) {
                       </span>
                     </div>
 
-                    <h3 className="mt-4 font-[family-name:Georgia,serif] text-2xl text-[#31251d]">
+                    <h3 className="mt-4 font-[family-name:Georgia,serif] text-xl text-[#31251d]">
                       {session.artifact?.title ?? "Untitled entry"}
                     </h3>
-                    <p className="mt-3 text-sm leading-7 text-[#695646]">
+                    <p className="mt-2 text-sm leading-7 text-[#695646]">
                       {session.artifact?.summary ??
                         "This entry was saved, but the artifact still needs processing."}
                     </p>
@@ -651,17 +572,12 @@ export function TodayHub({ data }: TodayHubProps) {
             </div>
           </section>
 
-          {/* Open tasks */}
-          <section className="rounded-[32px] border border-[#dbcdb8] bg-[#fffaf2] p-6 shadow-[0_18px_50px_rgba(92,63,39,0.08)]">
-            <div className="flex items-end justify-between gap-4">
-              <div>
-                <p className="text-[11px] uppercase tracking-[0.28em] text-[#9f7c63]">Open Tasks</p>
-                <h2 className="mt-2 font-[family-name:Georgia,serif] text-2xl text-[#31251d]">
-                  Loose ends worth keeping warm.
-                </h2>
-              </div>
-            </div>
-
+          {/* ── Open tasks ── */}
+          <section>
+            <p className="text-[11px] uppercase tracking-[0.28em] text-[#7a5e4a]">Open Tasks</p>
+            <h2 className="mt-2 font-[family-name:Georgia,serif] text-2xl text-[#31251d]">
+              Loose ends worth keeping warm.
+            </h2>
             <div className="mt-5">
               <TaskList
                 tasks={data.openTasks}
@@ -670,15 +586,9 @@ export function TodayHub({ data }: TodayHubProps) {
               />
             </div>
           </section>
-        </div>
 
-        {latestTurn && (
-          <p className="px-2 text-xs text-[#7c6959]">
-            Latest live turn:{" "}
-            <span className="font-medium text-[#4a392f]">{latestTurn.role}</span>
-          </p>
-        )}
-      </div>
-    </main>
+        </div>
+      </main>
+    </>
   )
 }

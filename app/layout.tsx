@@ -3,8 +3,8 @@ import { AppNav } from "@/app/_components/app-nav"
 import "./globals.css"
 
 export const metadata: Metadata = {
-  title: "Companion Journal",
-  description: "A cozy voice journal with daily captures, session artifacts, and a growing second brain.",
+  title: "Eli",
+  description: "Your daily voice companion.",
 }
 
 export default function RootLayout({
