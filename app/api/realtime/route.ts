@@ -59,7 +59,7 @@ export async function POST(req: Request) {
 
     if (!response.ok) {
       console.error("OpenAI Realtime API error:", text)
-      return Response.json({ error: text || "OpenAI API request failed" }, { status: 502 })
+      return Response.json({ error: "AI service unavailable" }, { status: 502 })
     }
 
     let normalizedSdp = text.trim().replace(/\r?\n/g, "\r\n")
