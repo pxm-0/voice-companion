@@ -1,6 +1,6 @@
 # Eli — Handoff
 
-Last updated: 2026-04-11
+Last updated: 2026-04-11 (evening)
 
 ## Project Snapshot
 
@@ -18,7 +18,7 @@ The product identity is a personal voice companion named Eli. Not a chatbot with
 
 ## Current Status
 
-**Deployed to Vercel. Auth is the last blocker — Postgres and OAuth credentials are partially done but not fully wired.**
+**Deployed to Vercel. Auth is nearly unblocked — all credentials are wired. Google OAuth redirect URIs may take a few hours to propagate.**
 
 ### What Is Done
 
@@ -46,71 +46,36 @@ The product identity is a personal voice companion named Eli. Not a chatbot with
 | `GOOGLE_ID` + `GOOGLE_SECRET` added to Vercel env | ✓ |
 | `AUTH_SECRET` set in Vercel env | ✓ |
 | `OPENAI_API_KEY` set in Vercel env | ✓ |
-| **`prisma migrate deploy` run against Neon** | **Blocking** |
-| **GitHub OAuth credentials added to Vercel env** | **Blocking** |
-| **Google OAuth app redirect URIs configured** | **Blocking** |
+| `prisma migrate deploy` run against Neon | ✓ |
+| `GITHUB_ID` + `GITHUB_SECRET` added to Vercel env | ✓ |
+| Google OAuth redirect URIs configured (both domains) | ✓ (propagating) |
 
 ---
 
 ## Next Steps (in order)
 
-### Step 1 — Deploy migration to Neon (BLOCKING)
+### Step 1 — Test login on production ✓ (pending propagation)
 
-The Postgres migration file exists locally but has never been run against the Neon database. Tables do not exist yet on Neon — every API call will fail until this runs.
+All blockers are resolved. Auth should work once Google's OAuth redirect URI propagation completes (can take a few hours after adding URIs in Google Cloud Console).
 
+Production domains:
+- `https://www.eli-journal.com`
+- `https://www.voice-companion-five.vercel.app`
+
+OAuth callback URIs configured in Google Cloud Console:
+- `https://www.eli-journal.com/api/auth/callback/google`
+- `https://www.voice-companion-five.vercel.app/api/auth/callback/google`
+
+GitHub OAuth callback: add the same two URLs to the GitHub OAuth App's callback URL field (GitHub allows multiple callback URLs separated by newlines).
+
+If login still fails after propagation, check Vercel runtime logs:
 ```bash
-# Pull Neon creds locally
-vercel env pull .env.local
-
-# Run the migration against Neon
-npx prisma migrate deploy
-```
-
-That's it. The migration file (`prisma/migrations/20260408062302_init/migration.sql`) is already complete.
-
-**Note:** `prisma/schema.prisma` uses `eli_store_DATABASE_URL` as the env var name (auto-set by the Neon Marketplace integration). `vercel env pull` will write it to `.env.local`.
-
----
-
-### Step 2 — Add GitHub OAuth credentials to Vercel env (BLOCKING)
-
-Google credentials are already in Vercel (`GOOGLE_ID` + `GOOGLE_SECRET`). GitHub is missing.
-
-1. Go to GitHub → Settings → Developer settings → OAuth Apps → New OAuth App
-   - Homepage URL: your production Vercel URL
-   - Callback URL: `https://your-domain.vercel.app/api/auth/callback/github`
-
-2. Add the credentials to Vercel:
-   ```bash
-   vercel env add GITHUB_ID
-   vercel env add GITHUB_SECRET
-   ```
-
-The code reads `GITHUB_ID` / `GITHUB_SECRET` (fixed 2026-04-11 — was previously `AUTH_GITHUB_ID` / `AUTH_GITHUB_SECRET`, a mismatch that caused the "auth client not present" error).
-
----
-
-### Step 3 — Configure Google OAuth app redirect URIs (BLOCKING)
-
-The `GOOGLE_ID` / `GOOGLE_SECRET` are in Vercel, but the Google Cloud OAuth Client needs the correct redirect URI:
-
-- Google Cloud Console → APIs & Services → Credentials → your OAuth 2.0 Client ID
-- Add to **Authorized redirect URIs**: `https://your-domain.vercel.app/api/auth/callback/google`
-
-Without this, Google will reject the OAuth flow even though the credentials are correct.
-
----
-
-### Step 4 — Redeploy
-
-After steps 1–3:
-```bash
-vercel --prod
+vercel logs --prod
 ```
 
 ---
 
-### Step 5 — Voice preference selector (planned feature, not blocking)
+### Step 2 — Voice preference selector (planned feature, not blocking)
 
 Plan file: `/Users/oreo/.claude/plans/mellow-napping-nest.md`
 
@@ -123,7 +88,7 @@ What's needed:
 
 ---
 
-### Step 6 — Phase 4: wire timing.ts VAD tuning (optional, not blocking)
+### Step 3 — Phase 4: wire timing.ts VAD tuning (optional, not blocking)
 
 `getTimingConfig()` in `lib/timing.ts` is not yet passed into the `turn_detection` field of `session.update`. The behavior layer fires correctly without it; this is a tuning optimization for silence detection thresholds.
 
@@ -363,20 +328,14 @@ Last full build: 2026-04-11
 
 ## Known Issues
 
-### 1. Neon tables don't exist (BLOCKING)
-`prisma migrate deploy` has never been run against Neon. All API routes that touch the DB will fail. Fix: `vercel env pull .env.local && npx prisma migrate deploy` (see Next Steps Step 1).
+### 1. Google OAuth redirect URIs propagating
+Added `eli-journal.com` and `voice-companion-five.vercel.app` to Google Cloud Console. Google propagation can take a few hours. Login via Google may still fail until then.
 
-### 2. GitHub OAuth credentials missing (BLOCKING)
-`GITHUB_ID` / `GITHUB_SECRET` not added to Vercel env. Login via GitHub will fail.
-
-### 3. Google OAuth redirect URI not configured (BLOCKING)
-`GOOGLE_ID` / `GOOGLE_SECRET` are in Vercel but the Google Cloud OAuth Client doesn't have the production redirect URI added. Login via Google will be rejected by Google.
-
-### 4. FK error for dev mock user (local only)
+### 2. FK error for dev mock user (local only)
 Creating a voice session locally fails with a foreign key constraint if the dev user (`dev-user-001`) doesn't exist in the `User` table. Fix: seed via Prisma Studio.
 
-### 5. Phase 4 (timing.ts VAD) not wired
+### 3. Phase 4 (timing.ts VAD) not wired
 `getTimingConfig()` from `lib/timing.ts` is not yet passed into session.update's `turn_detection` field. Behavior layer fires correctly; this is a tuning optimization only.
 
-### 6. Turbopack workspace-root warning
+### 4. Turbopack workspace-root warning
 Non-blocking build warning about multiple lockfiles. Does not affect runtime.
