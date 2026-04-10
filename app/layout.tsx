@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import { Analytics } from "@vercel/analytics/next"
 import { AppNav } from "@/app/_components/app-nav"
 import { auth } from "@/lib/auth"
 import "./globals.css"
@@ -23,6 +24,7 @@ export default async function RootLayout({
           {isAuthenticated && <AppNav />}
           <div className="flex-1">{children}</div>
         </div>
+        <Analytics />
       </body>
     </html>
   )
