@@ -5,6 +5,10 @@
   --foreground: #171717;
   --font-sans-stack: "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
   --font-mono-stack: "SFMono-Regular", "Menlo", "Monaco", "Consolas", monospace;
+
+  --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out-sine: cubic-bezier(0.37, 0, 0.63, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 @theme inline {
@@ -32,13 +36,13 @@ body {
   50% { transform: scale(1.008); }
 }
 .animate-breathe-gentle {
-  animation: breathe-gentle 4s ease-in-out infinite;
+  animation: breathe-gentle 4s var(--ease-in-out-sine) infinite;
 }
 
 @keyframes slideUp {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(14px);
   }
   to {
     opacity: 1;
@@ -74,7 +78,7 @@ body {
 }
 
 .animate-slide-up {
-  animation: slideUp 0.22s ease-out both;
+  animation: slideUp 300ms var(--ease-out-strong) both;
 }
 
 .animate-breathe {
@@ -89,11 +93,11 @@ body {
   animation: fadeIn 0.18s ease-out both;
 }
 
-/* Processing: slow rotation with subtle hue shift */
+/* Processing: slow rotation — scale + rotate only, no filter repaint */
 @keyframes orbProcessing {
-  0%   { transform: scale(1)     rotate(0deg);   filter: hue-rotate(0deg); }
-  50%  { transform: scale(1.012) rotate(180deg); filter: hue-rotate(8deg); }
-  100% { transform: scale(1)     rotate(360deg); filter: hue-rotate(0deg); }
+  0%   { transform: scale(1)     rotate(0deg); }
+  50%  { transform: scale(1.012) rotate(180deg); }
+  100% { transform: scale(1)     rotate(360deg); }
 }
 .animate-orb-processing {
   animation: orbProcessing 3.5s ease-in-out infinite;
@@ -101,14 +105,14 @@ body {
 
 /* Staggered reveal for post-session items */
 @keyframes revealUp {
-  from { opacity: 0; transform: translateY(16px); }
+  from { opacity: 0; transform: translateY(18px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 .animate-reveal-up {
-  animation: revealUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: revealUp 0.4s var(--ease-out-strong) both;
 }
 .animate-reveal-up-delay {
-  animation: revealUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) 1.5s both;
+  animation: revealUp 0.4s var(--ease-out-strong) 1.2s both;
 }
 
 /* Task item ping on reveal */
@@ -121,3 +125,65 @@ body {
   animation: taskPing 0.7s ease-out 2.2s both;
 }
 
+/* Overlay entry */
+@keyframes overlayEnter {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-overlay-enter {
+  animation: overlayEnter 320ms var(--ease-out-strong) both;
+}
+
+/* Overlay exit */
+@keyframes overlayExit {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(10px); }
+}
+.animate-overlay-exit {
+  animation: overlayExit 200ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+/* Page enter */
+@keyframes pageEnter {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-page-enter {
+  animation: pageEnter 350ms var(--ease-out-strong) both;
+}
+
+/* Button press feedback */
+.pressable {
+  transition: transform 120ms var(--ease-out-strong);
+}
+.pressable:active {
+  transform: scale(0.97);
+}
+
+/* Card hover lift */
+.hover-lift {
+  transition: transform 200ms var(--ease-out-strong);
+}
+@media (hover: hover) and (pointer: fine) {
+  .hover-lift:hover {
+    transform: translateY(-4px);
+  }
+}
+
+/* Reduced motion: disable decorative animations, keep simple fade */
+@media (prefers-reduced-motion: reduce) {
+  .animate-breathe,
+  .animate-breathe-gentle,
+  .animate-breathe-high,
+  .animate-orb-processing {
+    animation: none;
+  }
+  .animate-overlay-enter,
+  .animate-overlay-exit,
+  .animate-page-enter,
+  .animate-slide-up,
+  .animate-reveal-up,
+  .animate-reveal-up-delay {
+    animation: fadeIn 0.15s ease both;
+  }
+}

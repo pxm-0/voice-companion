@@ -41,9 +41,11 @@ export function TodayHub({ data }: TodayHubProps) {
   const [manualState, setManualState] = useState<"idle" | "saving" | "saved" | "error">("idle")
   const [manualError, setManualError] = useState<string | null>(null)
   const [guidanceEvent, setGuidanceEvent] = useState<TurnGuidanceEvent | null>(null)
+  const [overlayLeaving, setOverlayLeaving] = useState(false)
   const [timeGreeting, setTimeGreeting] = useState("Good morning.")
   const transcriptEndRef = useRef<HTMLDivElement | null>(null)
   const modeMenuRef = useRef<HTMLDivElement | null>(null)
+  const prevViewStateRef = useRef<'idle' | 'connecting' | 'listening' | 'processing' | 'responding' | null>(null)
 
   const { connected, connecting, connect, disconnect, updateInstructions, setMode } = useRealTime({
     onTurnGuidance: setGuidanceEvent,
@@ -256,13 +258,27 @@ export function TodayHub({ data }: TodayHubProps) {
     : saveState === 'saved' && savedSession ? 'responding'
     : 'idle'
 
-  const showOverlay = viewState === 'listening' || viewState === 'connecting' || viewState === 'processing'
+  const overlayVisible = viewState === 'listening' || viewState === 'connecting' || viewState === 'processing' || overlayLeaving
+
+  // Trigger exit animation when leaving an overlay state
+  useEffect(() => {
+    const prev = prevViewStateRef.current
+    prevViewStateRef.current = viewState
+    if (prev === null) return
+    const wasOverlay = prev === 'listening' || prev === 'connecting' || prev === 'processing'
+    const isNoLongerOverlay = viewState === 'responding' || viewState === 'idle'
+    if (wasOverlay && isNoLongerOverlay) {
+      setOverlayLeaving(true)
+      const t = setTimeout(() => setOverlayLeaving(false), 220)
+      return () => clearTimeout(t)
+    }
+  }, [viewState])
 
   return (
     <>
       {/* ── Session active overlay ── */}
-      {showOverlay && (
-        <div className="fixed inset-0 z-50 flex flex-col bg-[linear-gradient(180deg,#f5ede2_0%,#efe4d6_60%,#e8ddcf_100%)]">
+      {overlayVisible && (
+        <div className={`fixed inset-0 z-50 flex flex-col bg-[linear-gradient(180deg,#f5ede2_0%,#efe4d6_60%,#e8ddcf_100%)] ${overlayLeaving ? 'animate-overlay-exit' : 'animate-overlay-enter'}`}>
           {/* Minimal session header */}
           <div className="flex items-center justify-between border-b border-[#dacbb7] bg-[rgba(245,237,226,0.92)] px-6 py-4 backdrop-blur-xl">
             <span className="font-[family-name:Georgia,serif] text-2xl text-[#2f241d]">eli</span>
@@ -355,7 +371,7 @@ export function TodayHub({ data }: TodayHubProps) {
                   onClick={() => void handleDisconnect()}
                   disabled={!connected}
                   aria-label="Stop and save this session"
-                  className="min-h-[48px] w-full max-w-xs rounded-full bg-[#5c735f] px-6 py-3 text-sm font-medium text-[#f7fbf5] transition-colors hover:bg-[#49604c] disabled:opacity-50"
+                  className="pressable min-h-[48px] w-full max-w-xs rounded-full bg-[#5c735f] px-6 py-3 text-sm font-medium text-[#f7fbf5] transition-colors hover:bg-[#49604c] disabled:opacity-50"
                 >
                   Stop and save
                 </button>
@@ -392,7 +408,7 @@ export function TodayHub({ data }: TodayHubProps) {
               onClick={() => void handleConnect()}
               disabled={connecting}
               aria-label={connecting ? "Connecting to Eli, please wait" : "Start voice session with Eli"}
-              className={`relative flex h-48 w-48 items-center justify-center rounded-full border transition-all duration-300 focus-visible:ring-2 focus-visible:ring-[#a86a4a] focus-visible:ring-offset-4 ${
+              className={`pressable relative flex h-48 w-48 items-center justify-center rounded-full border transition-all duration-300 focus-visible:ring-2 focus-visible:ring-[#a86a4a] focus-visible:ring-offset-4 ${
                 connecting
                   ? "cursor-wait border-[#c7a47e] bg-[radial-gradient(circle_at_35%_30%,#f1dfbf_0%,#c7a47e_42%,#7f664f_100%)]"
                   : "animate-breathe-gentle border-[#b9825d] bg-[radial-gradient(circle_at_35%_30%,#f4ceb0_0%,#d4976d_42%,#8e5a43_100%)] hover:scale-[1.015]"
@@ -579,7 +595,7 @@ export function TodayHub({ data }: TodayHubProps) {
                   <Link
                     key={session.id}
                     href={`/sessions/${session.id}`}
-                    className="block rounded-[28px] border border-[#dfd2bf] bg-[#fff8ee] p-5 transition-transform hover:-translate-y-0.5"
+                    className="hover-lift block rounded-[28px] border border-[#dfd2bf] bg-[#fff8ee] p-5"
                   >
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="rounded-full border border-[#d7b79a] bg-[#f9efe2] px-3 py-1 text-xs text-[#7c5b45]">

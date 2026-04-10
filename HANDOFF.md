@@ -1,6 +1,6 @@
 # Eli — Handoff
 
-Last updated: 2026-04-11 (late night)
+Last updated: 2026-04-12
 
 ## Project Snapshot
 
@@ -52,8 +52,9 @@ The product identity is a personal voice companion named Eli. Not a chatbot with
 | Google OAuth redirect URIs configured (both domains) | ✓ |
 | **Today page state machine (idle/connecting/listening/processing/responding)** | ✓ |
 | **Processing overlay (orb spins while AI drafts entry)** | ✓ |
-| **Staggered reveal (summary → bullets at 1.5s + task ping at 2.2s)** | ✓ |
+| **Staggered reveal (summary → bullets at 1.2s + task ping at 2.2s)** | ✓ |
 | **"Start anywhere." idle prompt** | ✓ |
+| **Animation polish: easing tokens, overlay enter/exit, page transitions, press states** | ✓ |
 
 ---
 

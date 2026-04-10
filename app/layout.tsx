@@ -21,7 +21,7 @@ export default async function RootLayout({
       <body className="min-h-full bg-[#efe4d7] text-[#2f241d]">
         <div className="flex min-h-full flex-col">
           {isAuthenticated && <AppNav />}
-          <div className="flex-1">{children}</div>
+          <div className="flex-1 animate-page-enter">{children}</div>
         </div>
       </body>
     </html>
