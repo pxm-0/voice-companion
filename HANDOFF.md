@@ -1,6 +1,6 @@
 # Eli — Handoff
 
-Last updated: 2026-04-11 (night)
+Last updated: 2026-04-11 (late night)
 
 ## Project Snapshot
 
@@ -18,7 +18,7 @@ The product identity is a personal voice companion named Eli. Not a chatbot with
 
 ## Current Status
 
-**Deployed to Vercel. Landing page live. Auth nearly unblocked — all credentials wired, Google redirect URIs propagating.**
+**Deployed to Vercel. Auth live (Google + GitHub). Phase 1 UX state machine complete.**
 
 ### What Is Done
 
@@ -39,7 +39,7 @@ The product identity is a personal voice companion named Eli. Not a chatbot with
 | Rebrand to "Eli" (UI + AI identity) | ✓ |
 | Today hub redesign (greeting, orb, session overlay, mode pill) | ✓ |
 | Landing page (atmospheric, public-facing) | ✓ |
-| Voice preference setting (user-selectable) | Planned |
+| Voice preference setting (user-selectable, profile page) | ✓ |
 | Schema migrated to Postgres (`postgresql` provider) | ✓ |
 | Neon DB provisioned via Vercel Marketplace | ✓ |
 | Postgres migration file created (`20260408062302_init`) | ✓ |
@@ -49,47 +49,29 @@ The product identity is a personal voice companion named Eli. Not a chatbot with
 | `OPENAI_API_KEY` set in Vercel env | ✓ |
 | `prisma migrate deploy` run against Neon | ✓ |
 | `GITHUB_ID` + `GITHUB_SECRET` added to Vercel env | ✓ |
-| Google OAuth redirect URIs configured (both domains) | ✓ (propagating) |
+| Google OAuth redirect URIs configured (both domains) | ✓ |
+| **Today page state machine (idle/connecting/listening/processing/responding)** | ✓ |
+| **Processing overlay (orb spins while AI drafts entry)** | ✓ |
+| **Staggered reveal (summary → bullets at 1.5s + task ping at 2.2s)** | ✓ |
+| **"Start anywhere." idle prompt** | ✓ |
 
 ---
 
 ## Next Steps (in order)
 
-### Step 1 — Verify login once Google redirect URIs propagate
+### Step 1 — Phase 2: Journal hierarchy overhaul
 
-All blockers are resolved. Auth should work once Google's OAuth redirect URI propagation completes (can take a few hours after adding URIs in Google Cloud Console).
-
-Production domains:
-- `https://www.eli-journal.com`
-- `https://www.voice-companion-five.vercel.app`
-
-OAuth callback URIs configured in Google Cloud Console:
-- `https://www.eli-journal.com/api/auth/callback/google`
-- `https://www.voice-companion-five.vercel.app/api/auth/callback/google`
-
-GitHub OAuth callback: add the same two URLs to the GitHub OAuth App's callback URL field (GitHub allows multiple callback URLs separated by newlines).
-
-If login still fails after propagation, check Vercel runtime logs:
-```bash
-vercel logs --prod
-```
-
----
-
-### Step 2 — Voice preference selector (planned feature, not blocking)
-
-Plan file: `/Users/oreo/.claude/plans/mellow-napping-nest.md`
+Group sessions by Day in the sessions list view. Add daily auto-generated summary.
 
 What's needed:
-- Add `voicePreference String @default("ash")` to `User` model in `prisma/schema.prisma`
-- New `PATCH /api/profile/settings` endpoint — reads/writes `voicePreference` on `User`
-- `VoiceSettings` client component on `/profile` page — dropdown of available OpenAI Realtime voices
-- `app/api/realtime/route.ts` — read `voicePreference` from user record instead of hardcoded value
-- One migration: `npx prisma migrate dev --name add_voice_preference`
+- `app/sessions/page.tsx` — group sessions by calendar day (Week > Day > Sessions)
+- New `lib/daily-summary.ts` — auto-generate daily summary ("You focused on X, struggled with Y…") using existing AI pipeline
+- `GET /api/sessions` — optionally return grouped/aggregated data
+- Weekly layer: achievements, patterns, repeated themes (top of sessions page)
 
 ---
 
-### Step 3 — Phase 4: wire timing.ts VAD tuning (optional, not blocking)
+### Step 3 — Phase 3: Settings page + VAD wiring (low effort)
 
 `getTimingConfig()` in `lib/timing.ts` is not yet passed into the `turn_detection` field of `session.update`. The behavior layer fires correctly without it; this is a tuning optimization for silence detection thresholds.
 
@@ -319,26 +301,24 @@ User ends session
 
 ## Validation Status
 
-Last full build: 2026-04-11 (night)
+Last full build: 2026-04-11 (late night)
 - `npx tsc --noEmit` ✓ (zero errors)
-- `npm run build` ✓ (all routes)
+- `npm run build` ✓ (all 18 routes)
 - Deployed to Vercel ✓
 - Landing page live at `/` for unauthenticated visitors
+- Auth: Google + GitHub OAuth live
 - Neon DB: provisioned + migration deployed
-- Auth: all credentials wired, Google redirect URIs propagating
+- Phase 1 state machine: implemented + build verified
 
 ---
 
 ## Known Issues
 
-### 1. Google OAuth redirect URIs propagating
-Added `eli-journal.com` and `voice-companion-five.vercel.app` to Google Cloud Console. Google propagation can take a few hours. Login via Google may still fail until then.
-
-### 2. FK error for dev mock user (local only)
+### 1. FK error for dev mock user (local only)
 Creating a voice session locally fails with a foreign key constraint if the dev user (`dev-user-001`) doesn't exist in the `User` table. Fix: seed via Prisma Studio.
 
-### 3. Phase 4 (timing.ts VAD) not wired
+### 2. Phase 4 (timing.ts VAD) not wired
 `getTimingConfig()` from `lib/timing.ts` is not yet passed into session.update's `turn_detection` field. Behavior layer fires correctly; this is a tuning optimization only.
 
-### 4. Turbopack workspace-root warning
+### 3. Turbopack workspace-root warning
 Non-blocking build warning about multiple lockfiles. Does not affect runtime.

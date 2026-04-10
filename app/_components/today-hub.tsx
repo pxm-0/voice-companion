@@ -249,12 +249,19 @@ export function TodayHub({ data }: TodayHubProps) {
     }
   }
 
-  const inSession = connected || connecting
+  const viewState: 'idle' | 'connecting' | 'listening' | 'processing' | 'responding' =
+    connecting ? 'connecting'
+    : connected ? 'listening'
+    : saveState === 'saving' ? 'processing'
+    : saveState === 'saved' && savedSession ? 'responding'
+    : 'idle'
+
+  const showOverlay = viewState === 'listening' || viewState === 'connecting' || viewState === 'processing'
 
   return (
     <>
       {/* ── Session active overlay ── */}
-      {inSession && (
+      {showOverlay && (
         <div className="fixed inset-0 z-50 flex flex-col bg-[linear-gradient(180deg,#f5ede2_0%,#efe4d6_60%,#e8ddcf_100%)]">
           {/* Minimal session header */}
           <div className="flex items-center justify-between border-b border-[#dacbb7] bg-[rgba(245,237,226,0.92)] px-6 py-4 backdrop-blur-xl">
@@ -267,80 +274,96 @@ export function TodayHub({ data }: TodayHubProps) {
                 />
               )}
               <span className="text-sm text-[#7a624f]">
-                {connected ? "Listening live" : "Starting…"}
+                {viewState === 'processing' ? "Drafting…" : connected ? "Listening live" : "Starting…"}
               </span>
             </div>
           </div>
 
-          {/* Orb + transcript + stop */}
+          {/* Orb + content area */}
           <div className="flex flex-1 flex-col items-center justify-center gap-8 overflow-y-auto px-4 py-8">
-            <button
-              disabled
-              aria-label="Eli is listening"
-              className={`relative flex h-52 w-52 flex-shrink-0 items-center justify-center rounded-full border ${
-                connected
-                  ? isHighEmotion
-                    ? "animate-breathe-high border-[#ba6e58] bg-[radial-gradient(circle_at_35%_30%,#f2907a_0%,#c96d58_42%,#7a3f33_100%)]"
-                    : "animate-breathe border-[#ba6e58] bg-[radial-gradient(circle_at_35%_30%,#f2a08b_0%,#c96d58_42%,#7a3f33_100%)]"
-                  : "border-[#c7a47e] bg-[radial-gradient(circle_at_35%_30%,#f1dfbf_0%,#c7a47e_42%,#7f664f_100%)]"
-              }`}
-            >
-              <span className="pointer-events-none absolute inset-3 rounded-full border border-white/20" />
-              {guidanceEvent && connected && (
-                <span className="relative text-xs capitalize text-white/70">
-                  {guidanceEvent.state.intent}
-                </span>
-              )}
-            </button>
-
-            {/* Transcript */}
-            <div className="w-full max-w-xl">
-              <div
-                className="h-[38vh] overflow-y-auto pr-1"
-                role="log"
-                aria-live="polite"
-                aria-atomic="false"
-              >
-                <div className="space-y-3">
-                  {turns.length === 0 ? (
-                    <p className="py-8 text-center text-sm text-[#7a6858]">
-                      Your words will appear here as you speak.
-                    </p>
-                  ) : (
-                    turns.map((turn) => (
-                      <article
-                        key={turn.id}
-                        className={`animate-slide-up max-w-[90%] rounded-[24px] border px-4 py-3 shadow-[0_8px_24px_rgba(111,81,56,0.08)] ${
-                          turn.role === "user"
-                            ? "ml-auto border-[#d9b08d] bg-[#f7e5d4] text-[#3a2c22]"
-                            : "mr-auto border-[#d6d8c7] bg-[#eef1e7] text-[#243126]"
-                        }`}
-                      >
-                        <span className="text-[11px] uppercase tracking-[0.26em] text-black/45">
-                          {turn.role === "user" ? "You" : "Eli"}
-                        </span>
-                        <p className="mt-2 whitespace-pre-wrap text-sm leading-7">
-                          {turn.text || "…"}
-                        </p>
-                      </article>
-                    ))
-                  )}
-                  <div ref={transcriptEndRef} />
+            {viewState === 'processing' ? (
+              /* ── Processing state: calm rotating orb, no stop button ── */
+              <>
+                <div
+                  aria-label="Drafting your entry"
+                  className="animate-orb-processing relative flex h-52 w-52 flex-shrink-0 items-center justify-center rounded-full border border-[#c7a47e] bg-[radial-gradient(circle_at_35%_30%,#f1dfbf_0%,#c7a47e_42%,#7f664f_100%)]"
+                >
+                  <span className="pointer-events-none absolute inset-3 rounded-full border border-white/20" />
                 </div>
-              </div>
-            </div>
+                <p className="text-sm text-[#7a6858]">Drafting your entry…</p>
+              </>
+            ) : (
+              /* ── Listening / connecting state: transcript + stop button ── */
+              <>
+                <button
+                  disabled
+                  aria-label="Eli is listening"
+                  className={`relative flex h-52 w-52 flex-shrink-0 items-center justify-center rounded-full border ${
+                    connected
+                      ? isHighEmotion
+                        ? "animate-breathe-high border-[#ba6e58] bg-[radial-gradient(circle_at_35%_30%,#f2907a_0%,#c96d58_42%,#7a3f33_100%)]"
+                        : "animate-breathe border-[#ba6e58] bg-[radial-gradient(circle_at_35%_30%,#f2a08b_0%,#c96d58_42%,#7a3f33_100%)]"
+                      : "border-[#c7a47e] bg-[radial-gradient(circle_at_35%_30%,#f1dfbf_0%,#c7a47e_42%,#7f664f_100%)]"
+                  }`}
+                >
+                  <span className="pointer-events-none absolute inset-3 rounded-full border border-white/20" />
+                  {guidanceEvent && connected && (
+                    <span className="relative text-xs capitalize text-white/70">
+                      {guidanceEvent.state.intent}
+                    </span>
+                  )}
+                </button>
 
-            <button
-              onClick={() => void handleDisconnect()}
-              disabled={!connected}
-              aria-label="Stop and save this session"
-              className="min-h-[48px] w-full max-w-xs rounded-full bg-[#5c735f] px-6 py-3 text-sm font-medium text-[#f7fbf5] transition-colors hover:bg-[#49604c] disabled:opacity-50"
-            >
-              Stop and save
-            </button>
+                {/* Transcript */}
+                <div className="w-full max-w-xl">
+                  <div
+                    className="h-[38vh] overflow-y-auto pr-1"
+                    role="log"
+                    aria-live="polite"
+                    aria-atomic="false"
+                  >
+                    <div className="space-y-3">
+                      {turns.length === 0 ? (
+                        <p className="py-8 text-center text-sm text-[#7a6858]">
+                          Your words will appear here as you speak.
+                        </p>
+                      ) : (
+                        turns.map((turn) => (
+                          <article
+                            key={turn.id}
+                            className={`animate-slide-up max-w-[90%] rounded-[24px] border px-4 py-3 shadow-[0_8px_24px_rgba(111,81,56,0.08)] ${
+                              turn.role === "user"
+                                ? "ml-auto border-[#d9b08d] bg-[#f7e5d4] text-[#3a2c22]"
+                                : "mr-auto border-[#d6d8c7] bg-[#eef1e7] text-[#243126]"
+                            }`}
+                          >
+                            <span className="text-[11px] uppercase tracking-[0.26em] text-black/45">
+                              {turn.role === "user" ? "You" : "Eli"}
+                            </span>
+                            <p className="mt-2 whitespace-pre-wrap text-sm leading-7">
+                              {turn.text || "…"}
+                            </p>
+                          </article>
+                        ))
+                      )}
+                      <div ref={transcriptEndRef} />
+                    </div>
+                  </div>
+                </div>
 
-            {saveState === "error" && (
-              <p className="text-sm text-[#9c4c40]">{saveError ?? "The session could not be finalized."}</p>
+                <button
+                  onClick={() => void handleDisconnect()}
+                  disabled={!connected}
+                  aria-label="Stop and save this session"
+                  className="min-h-[48px] w-full max-w-xs rounded-full bg-[#5c735f] px-6 py-3 text-sm font-medium text-[#f7fbf5] transition-colors hover:bg-[#49604c] disabled:opacity-50"
+                >
+                  Stop and save
+                </button>
+
+                {saveState === "error" && (
+                  <p className="text-sm text-[#9c4c40]">{saveError ?? "The session could not be finalized."}</p>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -382,6 +405,11 @@ export function TodayHub({ data }: TodayHubProps) {
                 </span>
               )}
             </button>
+
+            {/* Idle prompt — only shown when no session recorded today */}
+            {viewState === 'idle' && data.sessions.length === 0 && (
+              <p className="text-sm text-[#9f7c63]">Start anywhere.</p>
+            )}
 
             {/* Mode pill */}
             <div className="relative" ref={modeMenuRef}>
@@ -425,35 +453,52 @@ export function TodayHub({ data }: TodayHubProps) {
               )}
             </div>
 
-            {/* Post-session result card */}
-            {saveState === "saved" && savedSession && (
-              <div className="animate-slide-up w-full rounded-[28px] border border-[#dfd2bf] bg-[#fff8ee] p-5">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <p className="text-[11px] uppercase tracking-[0.28em] text-[#9f7c63]">Just saved</p>
-                    <h3 className="mt-2 font-[family-name:Georgia,serif] text-xl text-[#31251d]">
-                      {savedSession.artifact?.title ?? "New entry"}
-                    </h3>
-                    <p className="mt-2 text-sm leading-6 text-[#695646]">
-                      {savedSession.artifact?.summary ?? "Your session was saved."}
-                    </p>
+            {/* Post-session staggered reveal */}
+            {viewState === 'responding' && savedSession && (
+              <>
+                {/* Summary card — reveals immediately */}
+                <div className="animate-reveal-up w-full rounded-[28px] border border-[#dfd2bf] bg-[#fff8ee] p-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="text-[11px] uppercase tracking-[0.28em] text-[#9f7c63]">Just saved</p>
+                      <h3 className="mt-2 font-[family-name:Georgia,serif] text-xl text-[#31251d]">
+                        {savedSession.artifact?.title ?? "New entry"}
+                      </h3>
+                      <p className="mt-2 text-sm leading-6 text-[#695646]">
+                        {savedSession.artifact?.summary ?? "Your session was saved."}
+                      </p>
+                    </div>
+                    <Link
+                      href={`/sessions/${savedSession.sessionId}`}
+                      className="shrink-0 rounded-full border border-[#dccab4] bg-[#fff9f1] px-3 py-1.5 text-xs text-[#7d4f39] transition-colors hover:bg-[#f8efe4]"
+                    >
+                      Read →
+                    </Link>
                   </div>
-                  <Link
-                    href={`/sessions/${savedSession.sessionId}`}
-                    className="shrink-0 rounded-full border border-[#dccab4] bg-[#fff9f1] px-3 py-1.5 text-xs text-[#7d4f39] transition-colors hover:bg-[#f8efe4]"
-                  >
-                    Read →
-                  </Link>
                 </div>
-              </div>
+
+                {/* Rapid-log bullets — reveal after 1.5 s with task-ping */}
+                {savedSession.artifact?.rapidLogBullets && savedSession.artifact.rapidLogBullets.length > 0 && (
+                  <div className="animate-reveal-up-delay w-full rounded-[28px] border border-[#dfd2bf] bg-[#fff8ee] p-5">
+                    <p className="text-[11px] uppercase tracking-[0.28em] text-[#9f7c63]">From this session</p>
+                    <ul className="mt-3 space-y-2">
+                      {savedSession.artifact.rapidLogBullets.map((bullet) => (
+                        <li
+                          key={bullet}
+                          className="animate-task-ping flex items-start gap-2 rounded-[12px] text-sm text-[#564539]"
+                        >
+                          <span className="mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-[#b78063]" />
+                          <span>{bullet}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </>
             )}
 
-            {saveState === "error" && !inSession && (
+            {saveState === "error" && viewState === 'idle' && (
               <p className="text-sm text-[#9c4c40]">{saveError ?? "The session could not be finalized."}</p>
-            )}
-
-            {saveState === "saving" && (
-              <p className="text-sm text-[#7d6959]">Saving session and drafting your entry…</p>
             )}
 
             {/* Manual log */}
