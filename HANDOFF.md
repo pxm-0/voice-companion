@@ -1,6 +1,6 @@
 # Eli — Handoff
 
-Last updated: 2026-04-07
+Last updated: 2026-04-11
 
 ## Project Snapshot
 
@@ -18,7 +18,7 @@ The product identity is a personal voice companion named Eli. Not a chatbot with
 
 ## Current Status
 
-**Deployed to Vercel. Backend is broken — SQLite cannot run on Vercel serverless.** The DB must be migrated to Postgres before the deployed version works. All other systems are functionally complete.
+**Deployed to Vercel. Auth is the last blocker — Postgres and OAuth credentials are partially done but not fully wired.**
 
 ### What Is Done
 
@@ -39,79 +39,78 @@ The product identity is a personal voice companion named Eli. Not a chatbot with
 | Rebrand to "Eli" (UI + AI identity) | ✓ |
 | Today hub redesign (greeting, orb, session overlay, mode pill) | ✓ |
 | Voice preference setting (user-selectable) | Planned |
-| **Database: Postgres migration** | **Blocking** |
-| OAuth credentials wired in Vercel env | Not done |
+| Schema migrated to Postgres (`postgresql` provider) | ✓ |
+| Neon DB provisioned via Vercel Marketplace | ✓ |
+| Postgres migration file created (`20260408062302_init`) | ✓ |
+| `eli_store_DATABASE_URL` wired in `prisma/schema.prisma` | ✓ |
+| `GOOGLE_ID` + `GOOGLE_SECRET` added to Vercel env | ✓ |
+| `AUTH_SECRET` set in Vercel env | ✓ |
+| `OPENAI_API_KEY` set in Vercel env | ✓ |
+| **`prisma migrate deploy` run against Neon** | **Blocking** |
+| **GitHub OAuth credentials added to Vercel env** | **Blocking** |
+| **Google OAuth app redirect URIs configured** | **Blocking** |
 
 ---
 
 ## Next Steps (in order)
 
-### Step 1 — Migrate database to Postgres (BLOCKING for production)
+### Step 1 — Deploy migration to Neon (BLOCKING)
 
-**Why:** Vercel serverless functions have no persistent filesystem. SQLite (`file:./dev.db`) doesn't exist on Vercel. Every API call to the DB fails on deploy.
+The Postgres migration file exists locally but has never been run against the Neon database. Tables do not exist yet on Neon — every API call will fail until this runs.
 
-**How:**
+```bash
+# Pull Neon creds locally
+vercel env pull .env.local
 
-1. Provision a Postgres database. Recommended: **Neon** via Vercel Marketplace (free tier, auto-provisions `DATABASE_URL` in Vercel env).
-   - Vercel dashboard → Storage → Browse Marketplace → Neon
-   - After provisioning, `DATABASE_URL` is set in Vercel env automatically for all environments
+# Run the migration against Neon
+npx prisma migrate deploy
+```
 
-2. Change `prisma/schema.prisma` datasource provider:
-   ```diff
-   datasource db {
-   -  provider = "sqlite"
-   +  provider = "postgresql"
-      url      = env("DATABASE_URL")
-   }
-   ```
+That's it. The migration file (`prisma/migrations/20260408062302_init/migration.sql`) is already complete.
 
-3. Generate a migration from the current schema:
-   ```bash
-   npx prisma migrate dev --name init
-   ```
-   This creates `prisma/migrations/` with SQL that Vercel will apply.
-
-4. Pull the Vercel Postgres `DATABASE_URL` locally to test:
-   ```bash
-   vercel env pull .env.local
-   ```
-
-5. Run the migration against the remote Postgres DB:
-   ```bash
-   npx prisma migrate deploy
-   ```
-
-6. Redeploy:
-   ```bash
-   vercel --prod
-   ```
-
-**Prisma schema changes needed beyond provider:** None expected. The current schema uses no SQLite-specific types. All field types (`String`, `DateTime`, `Boolean`, `Int`, `Float`, enums) map cleanly to Postgres.
-
-**Local dev after migration:** Keep a local `.env` pointing to the SQLite file for fast iteration, or use Neon's branch feature to get a separate dev database. If keeping SQLite locally, the `provider` line will need to stay `"sqlite"` in the local schema or you'll need to configure a dev DATABASE_URL separately.
+**Note:** `prisma/schema.prisma` uses `eli_store_DATABASE_URL` as the env var name (auto-set by the Neon Marketplace integration). `vercel env pull` will write it to `.env.local`.
 
 ---
 
-### Step 2 — Wire OAuth credentials in Vercel env
+### Step 2 — Add GitHub OAuth credentials to Vercel env (BLOCKING)
 
-Needed for production login to work:
-- `GOOGLE_ID` + `GOOGLE_SECRET` — Google Cloud Console → OAuth 2.0 Client
-  - Authorized redirect URI: `https://your-domain.vercel.app/api/auth/callback/google`
-- `GITHUB_ID` + `GITHUB_SECRET` — GitHub → Settings → Developer settings → OAuth Apps
-  - Callback URL: `https://your-domain.vercel.app/api/auth/callback/github`
-- `BETTER_AUTH_SECRET` — already in `.env`, confirm it's set in Vercel env
-- `NEXTAUTH_URL` — set to the production domain in Vercel env (Production only; not needed for Preview)
+Google credentials are already in Vercel (`GOOGLE_ID` + `GOOGLE_SECRET`). GitHub is missing.
 
-Add via Vercel dashboard → Settings → Environment Variables, or:
+1. Go to GitHub → Settings → Developer settings → OAuth Apps → New OAuth App
+   - Homepage URL: your production Vercel URL
+   - Callback URL: `https://your-domain.vercel.app/api/auth/callback/github`
+
+2. Add the credentials to Vercel:
+   ```bash
+   vercel env add GITHUB_ID
+   vercel env add GITHUB_SECRET
+   ```
+
+The code reads `GITHUB_ID` / `GITHUB_SECRET` (fixed 2026-04-11 — was previously `AUTH_GITHUB_ID` / `AUTH_GITHUB_SECRET`, a mismatch that caused the "auth client not present" error).
+
+---
+
+### Step 3 — Configure Google OAuth app redirect URIs (BLOCKING)
+
+The `GOOGLE_ID` / `GOOGLE_SECRET` are in Vercel, but the Google Cloud OAuth Client needs the correct redirect URI:
+
+- Google Cloud Console → APIs & Services → Credentials → your OAuth 2.0 Client ID
+- Add to **Authorized redirect URIs**: `https://your-domain.vercel.app/api/auth/callback/google`
+
+Without this, Google will reject the OAuth flow even though the credentials are correct.
+
+---
+
+### Step 4 — Redeploy
+
+After steps 1–3:
 ```bash
-vercel env add GOOGLE_ID
-vercel env add GOOGLE_SECRET
-# etc.
+vercel --prod
 ```
 
 ---
 
-### Step 3 — Voice preference selector (planned feature, not blocking)
+### Step 5 — Voice preference selector (planned feature, not blocking)
 
 Plan file: `/Users/oreo/.claude/plans/mellow-napping-nest.md`
 
@@ -124,7 +123,7 @@ What's needed:
 
 ---
 
-### Step 4 — Phase 4: wire timing.ts VAD tuning (optional, not blocking)
+### Step 6 — Phase 4: wire timing.ts VAD tuning (optional, not blocking)
 
 `getTimingConfig()` in `lib/timing.ts` is not yet passed into the `turn_detection` field of `session.update`. The behavior layer fires correctly without it; this is a tuning optimization for silence detection thresholds.
 
@@ -142,7 +141,7 @@ Auth is wired for production but OAuth creds may not be set up locally. To bypas
    BETTER_AUTH_SECRET=any-random-string
    ```
 
-2. Seed the mock dev user into SQLite (required for FK constraints):
+2. Seed the mock dev user into the DB (required for FK constraints):
    ```bash
    npx prisma studio
    ```
@@ -191,7 +190,7 @@ vercel env pull .env.local             # pull Vercel env vars locally
 - `GET|POST /api/auth/[...nextauth]` — NextAuth handler
 
 ### Persistence
-Prisma + SQLite locally (`prisma/dev.db`). **Must migrate to Postgres for Vercel.**
+Prisma + Neon Postgres (`eli_store_DATABASE_URL`). Migration file committed; run `prisma migrate deploy` to apply to Neon.
 
 Models: `JournalSession`, `SessionTurn`, `SessionArtifact`, `Task`, `ProfileMemory`, `ProfileSnapshot`, `User`, `Account`, `Session` (NextAuth), `VerificationToken`
 
@@ -325,12 +324,20 @@ User ends session
 
 ## Environment Variables
 
-### Required for production
-- `OPENAI_API_KEY`
-- `DATABASE_URL` — Postgres connection string (Neon recommended)
-- `BETTER_AUTH_SECRET`
-- `GOOGLE_ID` + `GOOGLE_SECRET`
-- `GITHUB_ID` + `GITHUB_SECRET`
+### Already set in Vercel (via Marketplace / manual)
+- `OPENAI_API_KEY` ✓
+- `eli_store_DATABASE_URL` ✓ (+ all other `eli_store_*` Neon vars)
+- `AUTH_SECRET` ✓
+- `GOOGLE_ID` + `GOOGLE_SECRET` ✓
+
+### Still missing from Vercel
+- `GITHUB_ID` + `GITHUB_SECRET` — add via `vercel env add`
+
+### Env var names the code expects (`lib/auth.config.ts`)
+- Google: `GOOGLE_ID` / `GOOGLE_SECRET`
+- GitHub: `GITHUB_ID` / `GITHUB_SECRET`
+- DB: `eli_store_DATABASE_URL` (set in `prisma/schema.prisma`)
+- NextAuth: `AUTH_SECRET`
 
 ### Optional
 - `OPENAI_SUMMARY_MODEL` (defaults to `gpt-5.4-nano`)
@@ -338,32 +345,38 @@ User ends session
 
 ### Not needed on Vercel
 - `NEXTAUTH_URL` — Vercel infers from deployment URL automatically
+- `BETTER_AUTH_SECRET` — leftover from earlier iteration, not read by code
 
 ---
 
 ## Validation Status
 
-Last full build: 2026-04-07
+Last full build: 2026-04-11
 - `npx tsc --noEmit` ✓ (zero errors)
-- `npm run build` ✓ (17 routes)
+- `npm run build` ✓
 - Deployed to Vercel ✓ (frontend loads)
-- Backend/DB: broken until Postgres migration
+- Postgres schema: migrated, migration file committed
+- Neon DB: provisioned, **migration not yet deployed** (tables don't exist)
+- Auth: credentials partially wired, GitHub missing
 
 ---
 
 ## Known Issues
 
-### 1. SQLite on Vercel (BLOCKING)
-All API routes that touch the DB fail on Vercel. Fix: Postgres migration (see Next Steps Step 1).
+### 1. Neon tables don't exist (BLOCKING)
+`prisma migrate deploy` has never been run against Neon. All API routes that touch the DB will fail. Fix: `vercel env pull .env.local && npx prisma migrate deploy` (see Next Steps Step 1).
 
-### 2. OAuth not configured in Vercel env
-Login will fail on the deployed version until Google/GitHub credentials are added to Vercel environment variables with correct redirect URIs.
+### 2. GitHub OAuth credentials missing (BLOCKING)
+`GITHUB_ID` / `GITHUB_SECRET` not added to Vercel env. Login via GitHub will fail.
 
-### 3. FK error for dev mock user (local only)
+### 3. Google OAuth redirect URI not configured (BLOCKING)
+`GOOGLE_ID` / `GOOGLE_SECRET` are in Vercel but the Google Cloud OAuth Client doesn't have the production redirect URI added. Login via Google will be rejected by Google.
+
+### 4. FK error for dev mock user (local only)
 Creating a voice session locally fails with a foreign key constraint if the dev user (`dev-user-001`) doesn't exist in the `User` table. Fix: seed via Prisma Studio.
 
-### 4. Phase 4 (timing.ts VAD) not wired
+### 5. Phase 4 (timing.ts VAD) not wired
 `getTimingConfig()` from `lib/timing.ts` is not yet passed into session.update's `turn_detection` field. Behavior layer fires correctly; this is a tuning optimization only.
 
-### 5. Turbopack workspace-root warning
+### 6. Turbopack workspace-root warning
 Non-blocking build warning about multiple lockfiles. Does not affect runtime.
