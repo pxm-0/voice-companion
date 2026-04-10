@@ -14,6 +14,11 @@ export default middleware((req) => {
     return null
   }
 
+  // / is public — shows landing for unauthenticated, today hub for authenticated
+  if (req.nextUrl.pathname === "/") {
+    return null
+  }
+
   // Protect all routes except api/auth endpoints and public assets
   if (!isLoggedIn && !req.nextUrl.pathname.startsWith("/api/auth")) {
     return Response.redirect(new URL("/login", req.nextUrl))
