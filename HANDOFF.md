@@ -1,6 +1,6 @@
 # Eli — Handoff
 
-Last updated: 2026-04-11 (evening)
+Last updated: 2026-04-11 (night)
 
 ## Project Snapshot
 
@@ -18,7 +18,7 @@ The product identity is a personal voice companion named Eli. Not a chatbot with
 
 ## Current Status
 
-**Deployed to Vercel. Auth is nearly unblocked — all credentials are wired. Google OAuth redirect URIs may take a few hours to propagate.**
+**Deployed to Vercel. Landing page live. Auth nearly unblocked — all credentials wired, Google redirect URIs propagating.**
 
 ### What Is Done
 
@@ -38,6 +38,7 @@ The product identity is a personal voice companion named Eli. Not a chatbot with
 | All pages + API routes auth-gated | ✓ |
 | Rebrand to "Eli" (UI + AI identity) | ✓ |
 | Today hub redesign (greeting, orb, session overlay, mode pill) | ✓ |
+| Landing page (atmospheric, public-facing) | ✓ |
 | Voice preference setting (user-selectable) | Planned |
 | Schema migrated to Postgres (`postgresql` provider) | ✓ |
 | Neon DB provisioned via Vercel Marketplace | ✓ |
@@ -54,7 +55,7 @@ The product identity is a personal voice companion named Eli. Not a chatbot with
 
 ## Next Steps (in order)
 
-### Step 1 — Test login on production ✓ (pending propagation)
+### Step 1 — Verify login once Google redirect URIs propagate
 
 All blockers are resolved. Auth should work once Google's OAuth redirect URI propagation completes (can take a few hours after adding URIs in Google Cloud Console).
 
@@ -135,11 +136,13 @@ vercel env pull .env.local             # pull Vercel env vars locally
 ## Architecture
 
 ### Frontend surfaces
-- `/` — Today: greeting, voice orb, mode selector, session overlay, post-session card, today's entries, open tasks
+- `/` — **branches on auth**: landing page (unauthenticated) or Today hub (authenticated)
+- `/login` — Google + GitHub OAuth sign-in
 - `/sessions` — archive of saved journal entries
 - `/sessions/[id]` — single journal entry with artifact/task editing and transcript
 - `/profile` — rolling summary + durable memories with edit/pin/archive
-- `/login` — Google + GitHub OAuth sign-in
+
+**Landing page** (`app/_components/landing.tsx`): full-height hero with breathing orb, Georgia serif wordmark, asymmetric 3-column feature grid (01/02/03), dark pull-quote section, CTA. Public, no auth required. AppNav is hidden for all unauthenticated routes.
 
 ### API routes
 - `POST /api/realtime` — exchanges SDP with OpenAI Realtime, injects brain instructions
@@ -316,13 +319,13 @@ User ends session
 
 ## Validation Status
 
-Last full build: 2026-04-11
+Last full build: 2026-04-11 (night)
 - `npx tsc --noEmit` ✓ (zero errors)
-- `npm run build` ✓
-- Deployed to Vercel ✓ (frontend loads)
-- Postgres schema: migrated, migration file committed
-- Neon DB: provisioned, **migration not yet deployed** (tables don't exist)
-- Auth: credentials partially wired, GitHub missing
+- `npm run build` ✓ (all routes)
+- Deployed to Vercel ✓
+- Landing page live at `/` for unauthenticated visitors
+- Neon DB: provisioned + migration deployed
+- Auth: all credentials wired, Google redirect URIs propagating
 
 ---
 
