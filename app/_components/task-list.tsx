@@ -28,16 +28,14 @@ export function TaskList({ tasks, emptyCopy, showSessionLink = false }: TaskList
     try {
       const response = await fetch(`/api/tasks/${taskId}`, {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(patch),
       })
 
       const data = (await response.json()) as { error?: string }
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to update task.")
+        throw new Error(data.error ?? "Failed to update task.")
       }
 
       router.refresh()
@@ -50,56 +48,50 @@ export function TaskList({ tasks, emptyCopy, showSessionLink = false }: TaskList
 
   if (tasks.length === 0) {
     return (
-      <div className="rounded-[24px] border border-dashed border-[#d9cbb7] bg-[#fffaf1] p-6 text-sm leading-7 text-[#756353]">
-        {emptyCopy}
-      </div>
+      <p className="py-2 text-sm leading-7 text-[#a89484]">{emptyCopy}</p>
     )
   }
 
   return (
-    <div className="space-y-3">
-      {tasks.map((task) => {
-        const draft = drafts[task.id] ?? task.content
-        const hasChanges = draft.trim() !== task.content
-        const isPending = pendingId === task.id
+    <div>
+      <ul className="divide-y divide-[#e5d9ca]" role="list">
+        {tasks.map((task) => {
+          const draft = drafts[task.id] ?? task.content
+          const hasChanges = draft.trim() !== task.content
+          const isPending = pendingId === task.id
 
-        return (
-          <article
-            key={task.id}
-            className="rounded-[24px] border border-[#dfd2bf] bg-[#fffaf2] p-4 shadow-[0_8px_24px_rgba(111,81,56,0.06)]"
-          >
-            <div className="flex items-start gap-3">
+          return (
+            <li key={task.id} className="flex items-start gap-3 py-4">
               <input
                 type="checkbox"
                 checked={task.completed}
                 onChange={(event) => void patchTask(task.id, { completed: event.target.checked })}
                 disabled={isPending}
-                className="mt-1 h-4 w-4 rounded border-[#c2b39a] text-[#8f5d44] focus:ring-[#c88862]"
+                aria-label={`Mark "${task.content}" as ${task.completed ? "incomplete" : "complete"}`}
+                className="mt-[3px] h-4 w-4 flex-shrink-0 rounded border-[#c2b39a] text-[#8f5d44] accent-[#9c6648] focus:ring-[#c88862] focus-visible:ring-2"
               />
 
               <div className="min-w-0 flex-1">
                 <input
                   value={draft}
                   onChange={(event) =>
-                    setDrafts((current) => ({
-                      ...current,
-                      [task.id]: event.target.value,
-                    }))
+                    setDrafts((current) => ({ ...current, [task.id]: event.target.value }))
                   }
                   onBlur={() => {
-                    if (hasChanges) {
-                      void patchTask(task.id, { content: draft })
-                    }
+                    if (hasChanges) void patchTask(task.id, { content: draft })
                   }}
-                  className={`w-full border-none bg-transparent p-0 text-sm leading-7 outline-none ${
-                    task.completed ? "text-[#9d8d7d] line-through" : "text-[#3b2f25]"
-                  }`}
+                  className={`w-full border-none bg-transparent p-0 text-sm leading-7 outline-none transition-opacity ${
+                    task.completed ? "text-[#a89484] line-through" : "text-[#3a2c22]"
+                  } ${isPending ? "opacity-50" : ""}`}
                 />
 
-                <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-[#8f7f6e]">
+                <div className="mt-1 flex flex-wrap items-center gap-4 text-xs text-[#a89484]">
                   {showSessionLink && task.sessionId && (
-                    <Link href={`/sessions/${task.sessionId}`} className="underline decoration-[#cf9c7d] underline-offset-4">
-                      {task.sessionTitle ?? "Open source session"}
+                    <Link
+                      href={`/sessions/${task.sessionId}`}
+                      className="underline decoration-[#d4c2ae] underline-offset-4 transition-colors hover:text-[#7d6959]"
+                    >
+                      {task.sessionTitle ?? "Source session"}
                     </Link>
                   )}
 
@@ -108,19 +100,23 @@ export function TaskList({ tasks, emptyCopy, showSessionLink = false }: TaskList
                       type="button"
                       onClick={() => void patchTask(task.id, { content: draft })}
                       disabled={isPending}
-                      className="rounded-full border border-[#d7b79a] px-3 py-1 text-[#6b4a36] transition-colors hover:bg-[#f8ebde]"
+                      className="text-[#9c6648] underline decoration-[#d4a882] underline-offset-4 transition-colors hover:text-[#7d4f39]"
                     >
                       Save edit
                     </button>
                   )}
                 </div>
               </div>
-            </div>
-          </article>
-        )
-      })}
+            </li>
+          )
+        })}
+      </ul>
 
-      {error && <p className="text-sm text-[#9c4c40]">{error}</p>}
+      {error && (
+        <p className="mt-3 text-sm text-[#9c4c40]" role="alert">
+          {error}
+        </p>
+      )}
     </div>
   )
 }

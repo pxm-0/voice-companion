@@ -1,6 +1,6 @@
 # Eli — Handoff
 
-Last updated: 2026-04-12
+Last updated: 2026-04-12 (UI v2 upgrade)
 
 ## Project Snapshot
 
@@ -18,7 +18,7 @@ The product identity is a personal voice companion named Eli. Not a chatbot with
 
 ## Current Status
 
-**Deployed to Vercel. Auth live (Google + GitHub). Phase 1 UX state machine complete.**
+**Deployed to Vercel. Auth live (Google + GitHub). Phase 1 UX state machine complete. UI v2 redesign applied.**
 
 ### What Is Done
 
@@ -55,6 +55,7 @@ The product identity is a personal voice companion named Eli. Not a chatbot with
 | **Staggered reveal (summary → bullets at 1.2s + task ping at 2.2s)** | ✓ |
 | **"Start anywhere." idle prompt** | ✓ |
 | **Animation polish: easing tokens, overlay enter/exit, page transitions, press states** | ✓ |
+| **UI v2 redesign: Outfit font, editorial nav, divider task list, reduced radii, mode selector** | ✓ |
 
 ---
 
@@ -302,7 +303,7 @@ User ends session
 
 ## Validation Status
 
-Last full build: 2026-04-11 (late night)
+Last full build: 2026-04-12
 - `npx tsc --noEmit` ✓ (zero errors)
 - `npm run build` ✓ (all 18 routes)
 - Deployed to Vercel ✓
@@ -310,6 +311,39 @@ Last full build: 2026-04-11 (late night)
 - Auth: Google + GitHub OAuth live
 - Neon DB: provisioned + migration deployed
 - Phase 1 state machine: implemented + build verified
+- UI v2 redesign: type-checked and verified
+
+---
+
+## UI Design System (v2)
+
+Applied per `ui_v2.md` spec + skill stack (design-taste-frontend + minimalist-ui + redesign-existing-projects).
+
+### Token layer (`app/globals.css`)
+CSS custom properties drive all color/spacing/radius decisions:
+- **Palette**: warm off-white canvas `#faf7f3`, surface `#fefcf8`, border `#e5d9ca`
+- **Text**: body `#3a2c22`, muted `#7d6959`, faint `#a89484`, accent `#9c6648`
+- **Radius**: `--radius-sm` 6px / `--radius-md` 10px / `--radius-lg` 16px (all cards use `rounded-xl` = 12px)
+- **Motion**: `--ease-out-strong`, `--ease-in-out-sine` — all animations reference these
+
+### Typography
+- **Body/UI**: `Outfit` (Google Fonts, loaded via `next/font/google`) — replaces Avenir Next system stack
+- **Headings**: `Georgia` serif — intentional for Eli's warm, reflective persona
+- All display headings use `tracking-tight`
+
+### Component patterns
+- **Nav**: plain text links, active = `font-medium` weight. No nested pills.
+- **Task list**: `divide-y` divider list, no card boxes. Empty state = plain text.
+- **Session entries**: `rounded-xl` card with border hover transition (no shadow, no lift)
+- **Mode selector**: text button + chevron, dropdown `rounded-xl py-1`
+- **CTAs**: `rounded-lg` (not pill), deep brown `#3a2c22` primary, terracotta `#9c6648` secondary
+- **Tags/badges**: flat square border labels, not pill shapes
+
+### Key decisions
+- Warm palette preserved (fits Eli's product soul) — minimalist-ui cold-white aesthetic adapted to the existing warm direction
+- `hover-lift` (animates `translateY`) removed everywhere — replaced with border color transitions
+- `min-h-screen` → `min-h-[100dvh]` on landing (iOS Safari viewport fix)
+- Title Case section headers → sentence case throughout
 
 ---
 

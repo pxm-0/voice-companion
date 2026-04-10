@@ -1,7 +1,14 @@
 import type { Metadata } from "next"
+import { Outfit } from "next/font/google"
 import { AppNav } from "@/app/_components/app-nav"
 import { auth } from "@/lib/auth"
 import "./globals.css"
+
+const outfit = Outfit({
+  subsets: ["latin"],
+  variable: "--font-outfit",
+  display: "swap",
+})
 
 export const metadata: Metadata = {
   title: "Eli",
@@ -17,7 +24,7 @@ export default async function RootLayout({
   const isAuthenticated = !!session?.user?.id
 
   return (
-    <html lang="en" className="h-full antialiased">
+    <html lang="en" className={`${outfit.variable} h-full antialiased`}>
       <body className="min-h-full bg-[#efe4d7] text-[#2f241d]">
         <div className="flex min-h-full flex-col">
           {isAuthenticated && <AppNav />}

@@ -1,27 +1,52 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-  --font-sans-stack: "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
+  --background: #faf7f3;
+  --foreground: #2f241d;
+
+  /* Font stacks */
+  --font-sans-stack: var(--font-outfit), "Helvetica Neue", "Segoe UI", sans-serif;
+  --font-serif-stack: "Georgia", "Times New Roman", serif;
   --font-mono-stack: "SFMono-Regular", "Menlo", "Monaco", "Consolas", monospace;
 
+  /* Palette tokens */
+  --color-surface: #fefcf8;
+  --color-surface-raised: #fffdf9;
+  --color-border: #e5d9ca;
+  --color-border-strong: #d4c2ae;
+  --color-text-body: #3a2c22;
+  --color-text-muted: #7d6959;
+  --color-text-faint: #a89484;
+  --color-accent: #9c6648;
+  --color-accent-warm: #b07858;
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+
+  /* Motion */
   --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out-sine: cubic-bezier(0.37, 0, 0.63, 1);
   --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+
+  /* Durations */
+  --duration-fast: 150ms;
+  --duration-normal: 280ms;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-sans-stack);
+  --font-serif: var(--font-serif-stack);
   --font-mono: var(--font-mono-stack);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #0e0b08;
+    --foreground: #ede5dc;
   }
 }
 
@@ -31,69 +56,40 @@ body {
   font-family: var(--font-sans-stack);
 }
 
+/* ── Orb: idle breathing ── */
 @keyframes breathe-gentle {
   0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.008); }
+  50%       { transform: scale(1.008); }
 }
 .animate-breathe-gentle {
   animation: breathe-gentle 4s var(--ease-in-out-sine) infinite;
 }
 
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(14px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
+/* ── Orb: listening pulse ── */
 @keyframes breathe {
   0%, 100% {
     transform: scale(1);
-    box-shadow: 0 18px 40px rgba(111, 81, 56, 0.15);
+    box-shadow: 0 18px 40px rgba(111, 81, 56, 0.14);
   }
   50% {
     transform: scale(1.025);
     box-shadow: 0 24px 56px rgba(111, 81, 56, 0.22);
   }
 }
-
 @keyframes breatheHigh {
   0%, 100% {
     transform: scale(1);
-    box-shadow: 0 18px 40px rgba(178, 80, 60, 0.20);
+    box-shadow: 0 18px 40px rgba(178, 80, 60, 0.18);
   }
   50% {
     transform: scale(1.03);
-    box-shadow: 0 28px 60px rgba(178, 80, 60, 0.32);
+    box-shadow: 0 28px 60px rgba(178, 80, 60, 0.30);
   }
 }
+.animate-breathe       { animation: breathe 3.2s ease-in-out infinite; }
+.animate-breathe-high  { animation: breatheHigh 2.0s ease-in-out infinite; }
 
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-
-.animate-slide-up {
-  animation: slideUp 300ms var(--ease-out-strong) both;
-}
-
-.animate-breathe {
-  animation: breathe 3.2s ease-in-out infinite;
-}
-
-.animate-breathe-high {
-  animation: breatheHigh 2.0s ease-in-out infinite;
-}
-
-.animate-fade-in {
-  animation: fadeIn 0.18s ease-out both;
-}
-
-/* Processing: slow rotation — scale + rotate only, no filter repaint */
+/* ── Orb: processing rotation ── */
 @keyframes orbProcessing {
   0%   { transform: scale(1)     rotate(0deg); }
   50%  { transform: scale(1.012) rotate(180deg); }
@@ -103,74 +99,55 @@ body {
   animation: orbProcessing 3.5s ease-in-out infinite;
 }
 
-/* Staggered reveal for post-session items */
+/* ── Reveal animations ── */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 @keyframes revealUp {
   from { opacity: 0; transform: translateY(18px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-.animate-reveal-up {
-  animation: revealUp 0.4s var(--ease-out-strong) both;
-}
-.animate-reveal-up-delay {
-  animation: revealUp 0.4s var(--ease-out-strong) 1.2s both;
-}
-
-/* Task item ping on reveal */
-@keyframes taskPing {
-  0%   { box-shadow: 0 0 0 0   rgba(167, 133, 97, 0.35); }
-  70%  { box-shadow: 0 0 0 8px rgba(167, 133, 97, 0); }
-  100% { box-shadow: 0 0 0 0   rgba(167, 133, 97, 0); }
-}
-.animate-task-ping {
-  animation: taskPing 0.7s ease-out 2.2s both;
-}
-
-/* Overlay entry */
-@keyframes overlayEnter {
-  from { opacity: 0; transform: translateY(14px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-.animate-overlay-enter {
-  animation: overlayEnter 320ms var(--ease-out-strong) both;
-}
-
-/* Overlay exit */
-@keyframes overlayExit {
-  from { opacity: 1; transform: translateY(0); }
-  to   { opacity: 0; transform: translateY(10px); }
-}
-.animate-overlay-exit {
-  animation: overlayExit 200ms cubic-bezier(0.4, 0, 1, 1) both;
-}
-
-/* Page enter */
 @keyframes pageEnter {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-.animate-page-enter {
-  animation: pageEnter 350ms var(--ease-out-strong) both;
+@keyframes overlayEnter {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes overlayExit {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(10px); }
 }
 
-/* Button press feedback */
+.animate-fade-in           { animation: fadeIn 0.18s ease-out both; }
+.animate-slide-up          { animation: slideUp 300ms var(--ease-out-strong) both; }
+.animate-reveal-up         { animation: revealUp 0.4s var(--ease-out-strong) both; }
+.animate-reveal-up-delay   { animation: revealUp 0.4s var(--ease-out-strong) 1.2s both; }
+.animate-page-enter        { animation: pageEnter 350ms var(--ease-out-strong) both; }
+.animate-overlay-enter     { animation: overlayEnter 320ms var(--ease-out-strong) both; }
+.animate-overlay-exit      { animation: overlayExit 200ms cubic-bezier(0.4, 0, 1, 1) both; }
+
+/* ── Task ping on reveal ── */
+@keyframes taskPing {
+  0%   { box-shadow: 0 0 0 0   rgba(167, 133, 97, 0.30); }
+  70%  { box-shadow: 0 0 0 8px rgba(167, 133, 97, 0); }
+  100% { box-shadow: 0 0 0 0   rgba(167, 133, 97, 0); }
+}
+.animate-task-ping { animation: taskPing 0.7s ease-out 2.2s both; }
+
+/* ── Interactive feedback ── */
 .pressable {
-  transition: transform 120ms var(--ease-out-strong);
+  transition: transform var(--duration-fast) var(--ease-out-strong);
 }
-.pressable:active {
-  transform: scale(0.97);
-}
+.pressable:active { transform: scale(0.97); }
 
-/* Card hover lift */
-.hover-lift {
-  transition: transform 200ms var(--ease-out-strong);
-}
-@media (hover: hover) and (pointer: fine) {
-  .hover-lift:hover {
-    transform: translateY(-4px);
-  }
-}
-
-/* Reduced motion: disable decorative animations, keep simple fade */
+/* ── Reduced motion ── */
 @media (prefers-reduced-motion: reduce) {
   .animate-breathe,
   .animate-breathe-gentle,

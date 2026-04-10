@@ -280,8 +280,8 @@ export function TodayHub({ data }: TodayHubProps) {
       {overlayVisible && (
         <div className={`fixed inset-0 z-50 flex flex-col bg-[linear-gradient(180deg,#f5ede2_0%,#efe4d6_60%,#e8ddcf_100%)] ${overlayLeaving ? 'animate-overlay-exit' : 'animate-overlay-enter'}`}>
           {/* Minimal session header */}
-          <div className="flex items-center justify-between border-b border-[#dacbb7] bg-[rgba(245,237,226,0.92)] px-6 py-4 backdrop-blur-xl">
-            <span className="font-[family-name:Georgia,serif] text-2xl text-[#2f241d]">eli</span>
+          <div className="flex items-center justify-between border-b border-[#e5d9ca] bg-[rgba(250,247,243,0.93)] px-6 py-4 backdrop-blur-xl">
+            <span className="font-[family-name:Georgia,serif] text-xl tracking-tight text-[#2f241d]">eli</span>
             <div className="flex items-center gap-3">
               {guidanceEvent && connected && (
                 <span
@@ -289,8 +289,8 @@ export function TodayHub({ data }: TodayHubProps) {
                   title={guidanceEvent.state.intent}
                 />
               )}
-              <span className="text-sm text-[#7a624f]">
-                {viewState === 'processing' ? "Drafting…" : connected ? "Listening live" : "Starting…"}
+              <span className="text-sm text-[#7d6959]">
+                {viewState === 'processing' ? "Drafting…" : connected ? "Listening" : "Starting…"}
               </span>
             </div>
           </div>
@@ -347,7 +347,7 @@ export function TodayHub({ data }: TodayHubProps) {
                         turns.map((turn) => (
                           <article
                             key={turn.id}
-                            className={`animate-slide-up max-w-[90%] rounded-[24px] border px-4 py-3 shadow-[0_8px_24px_rgba(111,81,56,0.08)] ${
+                            className={`animate-slide-up max-w-[90%] rounded-xl border px-4 py-3 ${
                               turn.role === "user"
                                 ? "ml-auto border-[#d9b08d] bg-[#f7e5d4] text-[#3a2c22]"
                                 : "mr-auto border-[#d6d8c7] bg-[#eef1e7] text-[#243126]"
@@ -371,7 +371,7 @@ export function TodayHub({ data }: TodayHubProps) {
                   onClick={() => void handleDisconnect()}
                   disabled={!connected}
                   aria-label="Stop and save this session"
-                  className="pressable min-h-[48px] w-full max-w-xs rounded-full bg-[#5c735f] px-6 py-3 text-sm font-medium text-[#f7fbf5] transition-colors hover:bg-[#49604c] disabled:opacity-50"
+                  className="pressable min-h-[48px] w-full max-w-xs rounded-lg bg-[#3a2c22] px-6 py-3 text-sm font-medium text-[#f5ede2] transition-colors hover:bg-[#2f241d] disabled:opacity-50"
                 >
                   Stop and save
                 </button>
@@ -386,16 +386,16 @@ export function TodayHub({ data }: TodayHubProps) {
       )}
 
       {/* ── Ambient home ── */}
-      <main className="min-h-full bg-[linear-gradient(180deg,#f5ede2_0%,#efe4d6_42%,#e8ddcf_100%)] px-4 py-10 text-[#2f241d] sm:px-6 lg:px-8">
+      <main className="min-h-full bg-[linear-gradient(180deg,#faf7f3_0%,#f3ede5_42%,#ede5da_100%)] px-4 py-10 text-[#2f241d] sm:px-6 lg:px-8">
         <div className="mx-auto max-w-2xl space-y-10">
 
           {/* Greeting + orb + mode */}
           <section className="flex flex-col items-center gap-6 text-center">
             <div>
-              <h1 className="font-[family-name:Georgia,serif] text-4xl text-[#31251d] sm:text-5xl">
+              <h1 className="font-[family-name:Georgia,serif] text-4xl tracking-tight text-[#31251d] sm:text-5xl">
                 {timeGreeting}
               </h1>
-              <p className="mt-2 text-sm text-[#7d6959]">
+              <p className="mt-2 text-sm text-[#a89484]">
                 {data.sessions.length === 0
                   ? "Nothing captured yet today."
                   : `${data.sessions.length} ${data.sessions.length === 1 ? "entry" : "entries"} today`}
@@ -424,25 +424,27 @@ export function TodayHub({ data }: TodayHubProps) {
 
             {/* Idle prompt — only shown when no session recorded today */}
             {viewState === 'idle' && data.sessions.length === 0 && (
-              <p className="text-sm text-[#9f7c63]">Start anywhere.</p>
+              <p className="text-sm text-[#a89484]">Start anywhere.</p>
             )}
 
-            {/* Mode pill */}
+            {/* Mode selector */}
             <div className="relative" ref={modeMenuRef}>
               <button
                 onClick={() => setShowModeMenu((v) => !v)}
                 aria-label="Change companion mode"
                 aria-expanded={showModeMenu}
                 aria-haspopup="listbox"
-                className="flex items-center gap-1.5 rounded-full border border-[#dccab4] bg-[#fff9f1] px-4 py-2 text-sm text-[#654f40] transition-colors hover:bg-[#f8efe4]"
+                className="inline-flex items-center gap-1.5 text-sm text-[#7d6959] transition-colors hover:text-[#2f241d]"
               >
                 {getModeLabel(mode)}
-                <span className="text-[#9f7c63] text-xs">▾</span>
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true" className="opacity-50">
+                  <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
               </button>
 
               {showModeMenu && (
                 <div
-                  className="absolute left-1/2 top-full z-20 mt-2 w-72 -translate-x-1/2 rounded-[20px] border border-[#dccab4] bg-[#fffaf1] p-2 shadow-[0_16px_40px_rgba(92,63,39,0.14)]"
+                  className="absolute left-1/2 top-full z-20 mt-3 w-72 -translate-x-1/2 rounded-xl border border-[#e5d9ca] bg-[#fefcf8] py-1 shadow-[0_8px_24px_rgba(92,63,39,0.10)]"
                   role="listbox"
                   aria-label="Companion mode"
                 >
@@ -455,14 +457,14 @@ export function TodayHub({ data }: TodayHubProps) {
                         setModeState(value)
                         setShowModeMenu(false)
                       }}
-                      className={`w-full rounded-[16px] px-4 py-3 text-left transition-colors ${
+                      className={`w-full px-4 py-3 text-left transition-colors ${
                         value === mode
-                          ? "border-l-4 border-[#a86a4a] bg-[#fff3e8] text-[#31251d]"
-                          : "text-[#654f40] hover:bg-[#f8efe4]"
+                          ? "bg-[#f5ede2] text-[#31251d]"
+                          : "text-[#654f40] hover:bg-[#f5ede2]/60"
                       }`}
                     >
                       <p className="font-[family-name:Georgia,serif] text-base">{getModeLabel(value)}</p>
-                      <p className="mt-0.5 text-xs leading-5 text-[#7d6959]">{getModeDescription(value)}</p>
+                      <p className="mt-0.5 text-xs leading-5 text-[#a89484]">{getModeDescription(value)}</p>
                     </button>
                   ))}
                 </div>
@@ -473,37 +475,37 @@ export function TodayHub({ data }: TodayHubProps) {
             {viewState === 'responding' && savedSession && (
               <>
                 {/* Summary card — reveals immediately */}
-                <div className="animate-reveal-up w-full rounded-[28px] border border-[#dfd2bf] bg-[#fff8ee] p-5">
+                <div className="animate-reveal-up w-full rounded-xl border border-[#e5d9ca] bg-[#fefcf8] p-5">
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
-                      <p className="text-[11px] uppercase tracking-[0.28em] text-[#9f7c63]">Just saved</p>
-                      <h3 className="mt-2 font-[family-name:Georgia,serif] text-xl text-[#31251d]">
+                      <p className="text-[11px] uppercase tracking-[0.24em] text-[#a89484]">Just saved</p>
+                      <h3 className="mt-2 font-[family-name:Georgia,serif] text-xl tracking-tight text-[#31251d]">
                         {savedSession.artifact?.title ?? "New entry"}
                       </h3>
-                      <p className="mt-2 text-sm leading-6 text-[#695646]">
+                      <p className="mt-2 text-sm leading-6 text-[#7d6959]">
                         {savedSession.artifact?.summary ?? "Your session was saved."}
                       </p>
                     </div>
                     <Link
                       href={`/sessions/${savedSession.sessionId}`}
-                      className="shrink-0 rounded-full border border-[#dccab4] bg-[#fff9f1] px-3 py-1.5 text-xs text-[#7d4f39] transition-colors hover:bg-[#f8efe4]"
+                      className="shrink-0 text-xs text-[#9c6648] underline decoration-[#d4a882] underline-offset-4 transition-colors hover:text-[#7d4f39]"
                     >
-                      Read →
+                      Read
                     </Link>
                   </div>
                 </div>
 
                 {/* Rapid-log bullets — reveal after 1.5 s with task-ping */}
                 {savedSession.artifact?.rapidLogBullets && savedSession.artifact.rapidLogBullets.length > 0 && (
-                  <div className="animate-reveal-up-delay w-full rounded-[28px] border border-[#dfd2bf] bg-[#fff8ee] p-5">
-                    <p className="text-[11px] uppercase tracking-[0.28em] text-[#9f7c63]">From this session</p>
-                    <ul className="mt-3 space-y-2">
+                  <div className="animate-reveal-up-delay w-full rounded-xl border border-[#e5d9ca] bg-[#fefcf8] p-5">
+                    <p className="text-[11px] uppercase tracking-[0.24em] text-[#a89484]">From this session</p>
+                    <ul className="mt-3 divide-y divide-[#e5d9ca]">
                       {savedSession.artifact.rapidLogBullets.map((bullet) => (
                         <li
                           key={bullet}
-                          className="animate-task-ping flex items-start gap-2 rounded-[12px] text-sm text-[#564539]"
+                          className="animate-task-ping flex items-start gap-2.5 py-2.5 text-sm text-[#564539]"
                         >
-                          <span className="mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-[#b78063]" />
+                          <span className="mt-[9px] h-1 w-1 flex-shrink-0 rounded-full bg-[#b78063]" />
                           <span>{bullet}</span>
                         </li>
                       ))}
@@ -521,7 +523,7 @@ export function TodayHub({ data }: TodayHubProps) {
             {!showManualLog ? (
               <button
                 onClick={() => setShowManualLog(true)}
-                className="py-2.5 text-sm text-[#7d4f39] underline decoration-[#cf9c7d] underline-offset-4"
+                className="py-2 text-sm text-[#a89484] underline decoration-[#d4c2ae] underline-offset-4 transition-colors hover:text-[#7d6959]"
               >
                 Write a note instead
               </button>
@@ -537,13 +539,13 @@ export function TodayHub({ data }: TodayHubProps) {
                   rows={5}
                   autoFocus
                   placeholder="What feels worth capturing right now?"
-                  className="w-full resize-none rounded-[24px] border border-[#e2d4c3] bg-[#fffdf8] px-4 py-4 text-sm leading-7 text-[#2f241d] outline-none transition-colors focus:border-[#d2a17f]"
+                  className="w-full resize-none rounded-xl border border-[#e5d9ca] bg-[#fefcf8] px-4 py-4 text-sm leading-7 text-[#2f241d] outline-none transition-colors focus:border-[#c9a880]"
                 />
                 <div className="flex items-center justify-between gap-4">
                   <button
                     type="button"
                     onClick={() => setShowManualLog(false)}
-                    className="text-sm text-[#9f7c63]"
+                    className="text-sm text-[#a89484] transition-colors hover:text-[#7d6959]"
                   >
                     Cancel
                   </button>
@@ -551,13 +553,13 @@ export function TodayHub({ data }: TodayHubProps) {
                     id="manual-log-submit"
                     type="submit"
                     disabled={manualState === "saving"}
-                    className="rounded-full bg-[#5c735f] px-5 py-2 text-sm font-medium text-[#f7fbf5] transition-colors hover:bg-[#49604c] disabled:opacity-70"
+                    className="pressable rounded-lg bg-[#3a2c22] px-5 py-2 text-sm font-medium text-[#f5ede2] transition-colors hover:bg-[#2f241d] disabled:opacity-70"
                   >
                     {manualState === "saving" ? "Saving…" : "Save"}
                   </button>
                 </div>
                 {manualState === "error" && (
-                  <p className="text-sm text-[#9c4c40]">{manualError}</p>
+                  <p className="text-sm text-[#9c4c40]" role="alert">{manualError}</p>
                 )}
                 {manualState === "saved" && (
                   <p className="text-sm text-[#4f654f]">Saved.</p>
@@ -570,58 +572,60 @@ export function TodayHub({ data }: TodayHubProps) {
           <section>
             <div className="flex items-end justify-between gap-4">
               <div>
-                <p className="text-[11px] uppercase tracking-[0.28em] text-[#7a5e4a]">
-                  Today&apos;s Entries
+                <p className="text-[11px] uppercase tracking-[0.24em] text-[#a89484]">
+                  Today&apos;s entries
                 </p>
-                <h2 className="mt-2 font-[family-name:Georgia,serif] text-2xl text-[#31251d]">
+                <h2 className="mt-2 font-[family-name:Georgia,serif] text-2xl tracking-tight text-[#31251d]">
                   Session artifacts, not just records.
                 </h2>
               </div>
               <Link
                 href="/sessions"
-                className="shrink-0 text-sm text-[#7d4f39] underline decoration-[#cf9c7d] underline-offset-4"
+                className="shrink-0 text-sm text-[#a89484] underline decoration-[#d4c2ae] underline-offset-4 transition-colors hover:text-[#7d6959]"
               >
                 All entries
               </Link>
             </div>
 
-            <div className="mt-5 space-y-4">
+            <div className="mt-5 space-y-3">
               {data.sessions.length === 0 ? (
-                <div className="rounded-[24px] border border-dashed border-[#d9cbb7] bg-[#fffaf1] p-6 text-sm leading-7 text-[#756353]">
+                <p className="py-4 text-sm leading-7 text-[#a89484]">
                   No entries yet today. Start a voice session or write a quick note.
-                </div>
+                </p>
               ) : (
                 data.sessions.map((session) => (
                   <Link
                     key={session.id}
                     href={`/sessions/${session.id}`}
-                    className="hover-lift block rounded-[28px] border border-[#dfd2bf] bg-[#fff8ee] p-5"
+                    className="group block rounded-xl border border-[#e5d9ca] bg-[#fefcf8] p-5 transition-all hover:border-[#c9a880]"
                   >
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded-full border border-[#d7b79a] bg-[#f9efe2] px-3 py-1 text-xs text-[#7c5b45]">
+                      <span className="rounded border border-[#e5d9ca] px-2.5 py-0.5 text-xs text-[#a89484]">
                         {session.inputType === "voice" ? "Voice" : "Manual"}
                       </span>
-                      <span className="rounded-full border border-[#e1d4c2] bg-white px-3 py-1 text-xs text-[#8e7d6c]">
+                      <span className="rounded border border-[#e5d9ca] px-2.5 py-0.5 text-xs text-[#a89484]">
                         {getModeLabel(session.mode)}
                       </span>
-                      <span className="rounded-full border border-[#e1d4c2] bg-white px-3 py-1 text-xs text-[#8e7d6c]">
-                        {session.tasks.filter((task) => !task.completed).length} open tasks
-                      </span>
+                      {session.tasks.filter((task) => !task.completed).length > 0 && (
+                        <span className="rounded border border-[#e5d9ca] px-2.5 py-0.5 text-xs text-[#a89484]">
+                          {session.tasks.filter((task) => !task.completed).length} open
+                        </span>
+                      )}
                     </div>
 
-                    <h3 className="mt-4 font-[family-name:Georgia,serif] text-xl text-[#31251d]">
+                    <h3 className="mt-3 font-[family-name:Georgia,serif] text-xl tracking-tight text-[#31251d]">
                       {session.artifact?.title ?? "Untitled entry"}
                     </h3>
-                    <p className="mt-2 text-sm leading-7 text-[#695646]">
+                    <p className="mt-1.5 text-sm leading-7 text-[#7d6959]">
                       {session.artifact?.summary ??
                         "This entry was saved, but the artifact still needs processing."}
                     </p>
 
                     {session.artifact?.rapidLogBullets?.length ? (
-                      <ul className="mt-4 space-y-2 text-sm text-[#564539]">
+                      <ul className="mt-3 space-y-1.5 text-sm text-[#7d6959]">
                         {session.artifact.rapidLogBullets.slice(0, 3).map((bullet) => (
-                          <li key={bullet} className="flex gap-2">
-                            <span className="mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-[#b78063]" />
+                          <li key={bullet} className="flex gap-2.5">
+                            <span className="mt-[10px] h-1 w-1 flex-shrink-0 rounded-full bg-[#c9a880]" />
                             <span>{bullet}</span>
                           </li>
                         ))}
@@ -635,8 +639,8 @@ export function TodayHub({ data }: TodayHubProps) {
 
           {/* ── Open tasks ── */}
           <section>
-            <p className="text-[11px] uppercase tracking-[0.28em] text-[#7a5e4a]">Open Tasks</p>
-            <h2 className="mt-2 font-[family-name:Georgia,serif] text-2xl text-[#31251d]">
+            <p className="text-[11px] uppercase tracking-[0.24em] text-[#a89484]">Open tasks</p>
+            <h2 className="mt-2 font-[family-name:Georgia,serif] text-2xl tracking-tight text-[#31251d]">
               Loose ends worth keeping warm.
             </h2>
             <div className="mt-5">
