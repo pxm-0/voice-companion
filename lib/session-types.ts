@@ -107,3 +107,20 @@ export function isCompanionMode(value: unknown): value is CompanionMode {
 export function isSessionInputType(value: unknown): value is SessionInputType {
   return typeof value === "string" && SESSION_INPUT_TYPES.includes(value as SessionInputType)
 }
+
+export type DayGroup = {
+  dateKey: string         // "2026-04-07" — used as React key and for date comparisons
+  dateLabel: string       // "Monday, April 7"
+  dailySummary: string | null
+  sessions: SessionCard[]
+  aggregatedTasks: SessionTask[]
+}
+
+export type WeekGroup = {
+  weekKey: string         // ISO date of Monday of that week: "2026-04-07"
+  weekLabel: string       // "April 7 – April 13"
+  weekSummary: string | null
+  days: DayGroup[]        // sorted most-recent day first
+}
+
+export type GroupedJournal = WeekGroup[]  // sorted most-recent week first

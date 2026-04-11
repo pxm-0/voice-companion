@@ -56,24 +56,23 @@ The product identity is a personal voice companion named Eli. Not a chatbot with
 | **"Start anywhere." idle prompt** | ✓ |
 | **Animation polish: easing tokens, overlay enter/exit, page transitions, press states** | ✓ |
 | **UI v2 redesign: Outfit font, editorial nav, divider task list, reduced radii, mode selector** | ✓ |
+| **Journal hierarchy (Week > Day > Sessions)** | ✓ |
+| **Daily AI summary (current week only)** | ✓ |
+| **Weekly intelligence summary** | ✓ |
+| **Day-level task aggregation (deduplicated)** | ✓ |
+| **Profile restructure (Patterns / Inferred Goals / Memory Fragments)** | ✓ |
 
 ---
 
 ## Next Steps (in order)
 
-### Step 1 — Phase 2: Journal hierarchy overhaul
+### Step 1 — Phase 3: Mode behavior + visual layer (v2.3 / v2.4)
 
-Group sessions by Day in the sessions list view. Add daily auto-generated summary.
-
-What's needed:
-- `app/sessions/page.tsx` — group sessions by calendar day (Week > Day > Sessions)
-- New `lib/daily-summary.ts` — auto-generate daily summary ("You focused on X, struggled with Y…") using existing AI pipeline
-- `GET /api/sessions` — optionally return grouped/aggregated data
-- Weekly layer: achievements, patterns, repeated themes (top of sessions page)
+Wire mode selector to timing/orb behavior in turn.ts and add CSS custom property layer for per-mode spacing/density/motion. See plan: `docs/superpowers/plans/2026-04-11-journal-profile-intelligence.md` (end section: "What This Plan Does NOT Cover").
 
 ---
 
-### Step 3 — Phase 3: Settings page + VAD wiring (low effort)
+### Step 2 — Phase 4: Settings page + VAD wiring (low effort)
 
 `getTimingConfig()` in `lib/timing.ts` is not yet passed into the `turn_detection` field of `session.update`. The behavior layer fires correctly without it; this is a tuning optimization for silence detection thresholds.
 
