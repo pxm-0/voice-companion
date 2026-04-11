@@ -10,10 +10,13 @@ import { formatDate } from "@/lib/format-date"
 import { upsertMemories, decayMemories } from "@/lib/memory"
 import { prisma } from "@/lib/prisma"
 import { generateSessionSummary } from "@/lib/session-summary"
+import { groupSessions } from "@/lib/journal-grouping"
+import { generateDailySummary, generateWeeklySummary } from "@/lib/daily-summary"
 import type {
   CompanionMode,
   FinalizeSessionRequest,
   FinalizeSessionResponse,
+  GroupedJournal,
   ProfileMemoryView,
   SessionArtifact,
   SessionCard,
@@ -980,4 +983,30 @@ export function validateMemoryPatch(body: unknown) {
     pinned: typeof payload.pinned === "boolean" ? payload.pinned : undefined,
     active: typeof payload.active === "boolean" ? payload.active : undefined,
   }
+}
+
+export async function getGroupedSessionList(userId: string): Promise<GroupedJournal> {
+  const sessions = await getSessionList(userId)
+  const grouped = groupSessions(sessions)
+
+  if (grouped.length === 0) return grouped
+
+  // Generate AI summaries only for the most recent week to keep page loads fast.
+  const mostRecentWeek = grouped[0]
+
+  const allWeekSessions = mostRecentWeek.days.flatMap((d) => d.sessions)
+  const [weekSummary, ...dailySummaries] = await Promise.all([
+    generateWeeklySummary(allWeekSessions),
+    ...mostRecentWeek.days.map((day) => generateDailySummary(day.sessions)),
+  ])
+
+  const hydratedDays = mostRecentWeek.days.map((day, i) => ({
+    ...day,
+    dailySummary: dailySummaries[i] ?? null,
+  }))
+
+  return [
+    { ...mostRecentWeek, weekSummary, days: hydratedDays },
+    ...grouped.slice(1),
+  ]
 }
