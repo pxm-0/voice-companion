@@ -67,6 +67,12 @@ describe("generateDailySummary", () => {
     const result = await generateDailySummary([SESSION_WITH_ARTIFACT])
     expect(result).toBeNull()
   })
+
+  it("returns null when fetch throws a network error", async () => {
+    mockFetch.mockRejectedValueOnce(new Error("ECONNRESET"))
+    const result = await generateDailySummary([SESSION_WITH_ARTIFACT])
+    expect(result).toBeNull()
+  })
 })
 
 describe("generateWeeklySummary", () => {

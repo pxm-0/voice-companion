@@ -10,30 +10,34 @@ async function callOpenAI(prompt: string): Promise<string | null> {
 
   const model = process.env.OPENAI_SUMMARY_MODEL || "gpt-5.4-nano"
 
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      temperature: 0.4,
-      messages: [
-        {
-          role: "system",
-          content:
-            "You write warm, specific journal summaries. Be honest and human. No filler. No therapy-speak.",
-        },
-        { role: "user", content: prompt },
-      ],
-    }),
-  })
+  try {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        temperature: 0.4,
+        messages: [
+          {
+            role: "system",
+            content:
+              "You write warm, specific journal summaries. Be honest and human. No filler. No therapy-speak.",
+          },
+          { role: "user", content: prompt },
+        ],
+      }),
+    })
 
-  if (!response.ok) return null
+    if (!response.ok) return null
 
-  const data = (await response.json()) as OpenAIResponse
-  return data.choices?.[0]?.message?.content?.trim() ?? null
+    const data = (await response.json()) as OpenAIResponse
+    return data.choices?.[0]?.message?.content?.trim() ?? null
+  } catch {
+    return null
+  }
 }
 
 export async function generateDailySummary(sessions: SessionCard[]): Promise<string | null> {
