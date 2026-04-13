@@ -182,6 +182,17 @@ export function Landing() {
           <span className="font-[family-name:Georgia,serif] text-base tracking-tight text-[#2f241d]">eli</span>
           <p className="text-xs text-[#a89484]">Your voice, your story.</p>
         </div>
+        <p className="mt-4 text-xs text-[#c4b09a]">
+          by Dustin A ·{' '}
+          <a
+            href="https://github.com/pxm-0"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline underline-offset-2 hover:text-[#7d6959] transition-colors"
+          >
+            github.com/pxm-0
+          </a>
+        </p>
       </footer>
     </div>
   )

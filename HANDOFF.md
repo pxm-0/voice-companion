@@ -1,6 +1,6 @@
 # Eli — Handoff
 
-Last updated: 2026-04-12 (UI v2 upgrade)
+Last updated: 2026-04-13 (footer attribution)
 
 ## Project Snapshot
 
@@ -61,6 +61,7 @@ The product identity is a personal voice companion named Eli. Not a chatbot with
 | **Weekly intelligence summary** | ✓ |
 | **Day-level task aggregation (deduplicated)** | ✓ |
 | **Profile restructure (Patterns / Inferred Goals / Memory Fragments)** | ✓ |
+| **Footer attribution (by Dustin A · github.com/pxm-0)** | ✓ |
 
 ---
 
@@ -302,7 +303,7 @@ User ends session
 
 ## Validation Status
 
-Last full build: 2026-04-12
+Last full build: 2026-04-13
 - `npx tsc --noEmit` ✓ (zero errors)
 - `npm run build` ✓ (all 18 routes)
 - Deployed to Vercel ✓
